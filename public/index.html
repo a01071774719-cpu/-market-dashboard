@@ -2,8 +2,24 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>시장 동향</title>
+
+    <!-- PWA: 홈 화면에 추가했을 때 앱처럼 동작하도록 하는 설정 -->
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#2ebd85" />
+
+    <!-- 안드로이드 크롬 -->
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- 아이폰 사파리 전용 태그 (안드로이드에는 영향 없음) -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="시장 동향" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="icons/icon-512.png" />
+
+    <link rel="icon" href="icons/icon-192.png" />
     <link rel="stylesheet" href="styles.css" />
     <!-- 차트 라이브러리 (v4 API 사용) -->
     <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
@@ -39,5 +55,13 @@
     </footer>
 
     <script src="app.js"></script>
+    <script>
+      // PWA 설치 조건 충족을 위한 최소 서비스 워커 등록
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+        });
+      }
+    </script>
   </body>
 </html>

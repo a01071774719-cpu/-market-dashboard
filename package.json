@@ -1,0 +1,17 @@
+{
+  "name": "market-dashboard",
+  "version": "1.0.0",
+  "description": "시장 동향 - 실시간 시장 동향 대시보드 (미국채 금리 / 미국 지수 / 비트코인 / 금)",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

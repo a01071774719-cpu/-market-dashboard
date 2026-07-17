@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>시장 동향</title>
+    <link rel="stylesheet" href="styles.css" />
+    <!-- 차트 라이브러리 (v4 API 사용) -->
+    <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="title-wrap">
+        <h1>시장 동향</h1>
+        <span class="subtitle">실시간 마켓 대시보드</span>
+      </div>
+      <div class="controls">
+        <div class="clock" id="clock">--:--:--</div>
+      </div>
+    </header>
+
+    <nav class="tabbar" id="tabbar" aria-label="섹션 탭"><!-- 탭 버튼은 JS 가 생성 --></nav>
+
+    <div class="rangebar" id="rangeBar" aria-label="차트 기간">
+      <span class="rangebar-label">차트 기간</span>
+      <button data-range="1d" class="active">1일</button>
+      <button data-range="5d">5일</button>
+      <button data-range="1mo">1개월</button>
+      <button data-range="6mo">6개월</button>
+      <button data-range="1y">1년</button>
+      <span class="poll-status" id="pollStatus"></span>
+    </div>
+
+    <main id="sections"><!-- 섹션/카드는 JS 가 생성 --></main>
+
+    <footer class="foot">
+      데이터 출처: Yahoo Finance · 업비트 · 바이낸스 · 네이버 금융 (백엔드 프록시 경유) ·
+      개인용 대시보드 · 자동 갱신 <span id="refreshSec">20</span>초 간격
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>

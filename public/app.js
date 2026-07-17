@@ -66,6 +66,13 @@ const SECTIONS = [
         link: 'https://finance.naver.com/marketindex/goldDetail.naver' },
     ],
   },
+  {
+    id: 'feargreed',
+    title: '공포탐욕지수',
+    tabLabel: '공포탐욕지수',
+    custom: 'feargreed', // 일반 카드 그리드가 아닌 전용 레이아웃
+    items: [],
+  },
 ];
 
 const ALL_ITEMS = SECTIONS.flatMap((s) => s.items);
@@ -188,6 +195,11 @@ function showTab(tabId) {
     sec.hidden = sec.dataset.section !== tabId;
   });
   // 숨겨졌다 보이는 순간 차트가 0px 로 잡혀 있을 수 있으니 다시 맞춘다.
+  if (tabId === 'feargreed' && fg.chart) {
+    try {
+      fg.chart.timeScale().fitContent();
+    } catch (_) {}
+  }
   const shown = SECTIONS.find((s) => s.id === tabId);
   if (shown) {
     for (const item of shown.items) {
@@ -228,11 +240,16 @@ function buildSections() {
       head.appendChild(toggle);
     }
     sec.appendChild(head);
+    root.appendChild(sec);
+
+    if (section.custom === 'feargreed') {
+      buildFearGreedPanel(sec);
+      continue;
+    }
 
     const grid = document.createElement('div');
     grid.className = 'grid';
     sec.appendChild(grid);
-    root.appendChild(sec);
 
     for (const item of section.items) {
       if (item.type === 'premium') buildPremiumCard(grid, item);
@@ -340,6 +357,239 @@ function buildPremiumCard(grid, item) {
   });
 
   cards[item.key] = { item, el, chart, series, refs, trend: [] };
+}
+
+// ---- 공포탐욕지수(CNN Fear & Greed) 전용 패널 -------------------------------
+const FEARGREED_REFRESH_MS = 60000; // 1분 간격 (다른 카드보다 느긋하게)
+const fg = { refs: {}, chart: null, series: null }; // 패널 상태(참조) 보관
+
+// 점수(0~100) → 색상 / 한국어 등급. 5구간 색상표는 게이지·배지 공통 사용.
+function fgColor(score) {
+  if (score == null) return '#8ba396';
+  if (score < 25) return '#8b1a1a'; // 진한 빨강 - 극단적 공포
+  if (score < 45) return '#f6465c'; // 빨강 - 공포
+  if (score < 55) return '#f0b429'; // 노랑/회색 - 중립
+  if (score < 75) return '#2ebd85'; // 초록 - 탐욕
+  return '#1f8f5f'; // 진한 초록 - 극단적 탐욕
+}
+function fgLabel(score) {
+  if (score == null) return '—';
+  if (score < 25) return '극단적 공포';
+  if (score < 45) return '공포';
+  if (score < 55) return '중립';
+  if (score < 75) return '탐욕';
+  return '극단적 탐욕';
+}
+const FG_RATING_KO = {
+  'extreme fear': '극단적 공포',
+  fear: '공포',
+  neutral: '중립',
+  greed: '탐욕',
+  'extreme greed': '극단적 탐욕',
+};
+function fgRatingKo(r) {
+  return FG_RATING_KO[String(r || '').toLowerCase()] || r || '—';
+}
+
+// 반원형 게이지의 점수 → 각도(도, 0=오른쪽·180=왼쪽 기준 표준 수학각) 변환
+function fgTheta(score) {
+  const s = Math.max(0, Math.min(100, score == null ? 50 : score));
+  return 180 * (1 - s / 100);
+}
+function fgPoint(cx, cy, r, thetaDeg) {
+  const rad = (thetaDeg * Math.PI) / 180;
+  return { x: cx + r * Math.cos(rad), y: cy - r * Math.sin(rad) };
+}
+function fgArcPath(cx, cy, r, thetaStart, thetaEnd) {
+  const p1 = fgPoint(cx, cy, r, thetaStart);
+  const p2 = fgPoint(cx, cy, r, thetaEnd);
+  return `M ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} A ${r} ${r} 0 0 1 ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+}
+
+function buildFearGreedPanel(sec) {
+  const GCX = 150, GCY = 150, GR = 110; // 게이지 중심/반지름
+  const bands = [
+    [0, 25, '#8b1a1a'],
+    [25, 45, '#f6465c'],
+    [45, 55, '#f0b429'],
+    [55, 75, '#2ebd85'],
+    [75, 100, '#1f8f5f'],
+  ];
+  const arcPaths = bands
+    .map(
+      ([a, b, color]) =>
+        `<path d="${fgArcPath(GCX, GCY, GR, fgTheta(a), fgTheta(b))}" stroke="${color}" stroke-width="26" fill="none" stroke-linecap="butt" />`
+    )
+    .join('');
+
+  const wrap = document.createElement('div');
+  wrap.className = 'fg-panel';
+  wrap.innerHTML = `
+    <div class="fg-error" data-ref="fgError" hidden>⚠️ 일시적으로 데이터를 가져올 수 없음 (CNN 비공식 데이터 소스)</div>
+
+    <div class="fg-top">
+      <div class="card fg-gauge-card">
+        <div class="fg-gauge-wrap">
+          <svg viewBox="0 0 300 165" class="fg-gauge-svg">
+            ${arcPaths}
+            <line data-ref="fgNeedle" x1="${GCX}" y1="${GCY}" x2="${GCX}" y2="${GCY - 90}"
+              stroke="#e6efe9" stroke-width="4" stroke-linecap="round" />
+            <circle cx="${GCX}" cy="${GCY}" r="7" fill="#e6efe9" />
+          </svg>
+          <div class="fg-gauge-score" data-ref="fgScore">--</div>
+          <div class="fg-gauge-rating" data-ref="fgRating">불러오는 중…</div>
+        </div>
+        <div class="card-foot">
+          <span data-ref="fgUpdated"></span>
+          <span class="fg-source">출처: CNN Business (비공식 데이터, 참고용)</span>
+        </div>
+      </div>
+
+      <div class="card fg-chart-card">
+        <div class="card-name">지난 1년 추이</div>
+        <div class="chart fg-history-chart" data-ref="fgChart"></div>
+      </div>
+    </div>
+
+    <div class="fg-featured-grid">
+      <div class="card fg-featured" data-ref="fgVixCard">
+        <div class="card-name">시장 변동성 (VIX)</div>
+        <div class="fg-featured-value" data-ref="fgVixValue">--</div>
+        <div class="fg-featured-badge" data-ref="fgVixBadge">--</div>
+        <div class="fg-featured-sub" data-ref="fgVixSub"></div>
+      </div>
+      <div class="card fg-featured" data-ref="fgPutCallCard">
+        <div class="card-name">풋/콜 옵션 비율</div>
+        <div class="fg-featured-value" data-ref="fgPutCallValue">--</div>
+        <div class="fg-featured-badge" data-ref="fgPutCallBadge">--</div>
+        <div class="fg-featured-sub" data-ref="fgPutCallSub"></div>
+      </div>
+    </div>
+
+    <div class="fg-small-grid" data-ref="fgSmallGrid"></div>
+  `;
+  sec.appendChild(wrap);
+
+  fg.refs = collectRefs(wrap);
+  fg.chart = makeChart(fg.refs.fgChart);
+  fg.chart.timeScale().applyOptions({ timeVisible: false });
+  fg.series = fg.chart.addLineSeries({
+    color: '#2ebd85',
+    lineWidth: 2,
+    priceLineVisible: false,
+    lastValueVisible: false,
+  });
+
+  // 작은 하위 지표 5개 카드 틀을 미리 만들어 둔다.
+  const smallDefs = [
+    { key: 'momentum', name: '시장 모멘텀' },
+    { key: 'priceStrength', name: '주식 가격 강도' },
+    { key: 'priceBreadth', name: '주식 가격 폭' },
+    { key: 'junkBond', name: '정크본드 수요' },
+    { key: 'safeHaven', name: '안전자산 수요' },
+  ];
+  fg.refs.fgSmallGrid.innerHTML = smallDefs
+    .map(
+      (d) => `
+      <div class="card fg-small" data-ref="fgSmall_${d.key}">
+        <div class="card-name">${d.name}</div>
+        <div class="fg-small-score" data-ref="fgSmallScore_${d.key}">--</div>
+        <div class="fg-small-badge" data-ref="fgSmallBadge_${d.key}">--</div>
+      </div>`
+    )
+    .join('');
+  Object.assign(fg.refs, collectRefs(fg.refs.fgSmallGrid));
+}
+
+// 공포탐욕지수 + VIX 실시간 시세를 함께 갱신
+async function updateFearGreed() {
+  if (!fg.refs.fgScore) return; // 아직 패널이 안 만들어졌으면 skip
+
+  try {
+    const [fgRes, vixRes] = await Promise.all([
+      fetch('/api/feargreed'),
+      fetch('/api/chart?symbol=' + encodeURIComponent('^VIX') + '&range=1d&interval=5m'),
+    ]);
+    const fgData = await fgRes.json();
+    if (!fgRes.ok || fgData.available === false) {
+      throw new Error(fgData.error || `HTTP ${fgRes.status}`);
+    }
+
+    fg.refs.fgError.hidden = true;
+
+    // --- 메인 게이지 ---
+    const score = fgData.main.score;
+    fg.refs.fgScore.textContent = fmtNumber(score, 0);
+    fg.refs.fgScore.style.color = fgColor(score);
+    fg.refs.fgRating.textContent = fgLabel(score);
+    fg.refs.fgRating.style.color = fgColor(score);
+    const needleP = fgPoint(150, 150, 90, fgTheta(score));
+    fg.refs.fgNeedle.setAttribute('x2', needleP.x.toFixed(2));
+    fg.refs.fgNeedle.setAttribute('y2', needleP.y.toFixed(2));
+    fg.refs.fgUpdated.textContent = `갱신 ${new Date().toLocaleTimeString('ko-KR')}`;
+
+    // --- 과거 1년 추이 차트 ---
+    if (Array.isArray(fgData.historical) && fgData.historical.length) {
+      const seen = new Set();
+      const points = [];
+      for (const p of fgData.historical) {
+        if (seen.has(p.time)) continue;
+        seen.add(p.time);
+        points.push({ time: p.time, value: p.value });
+      }
+      fg.series.setData(points);
+      fg.series.applyOptions({ color: fgColor(score) });
+      fg.chart.timeScale().fitContent();
+    }
+
+    // --- 하위 지표: VIX 강조 카드 (CNN 등급 + 야후 실시간 실제 수치) ---
+    const vix = fgData.subIndicators.vix;
+    fg.refs.fgVixBadge.textContent = fgRatingKo(vix?.rating);
+    fg.refs.fgVixBadge.style.background = fgColor(vix?.score) + '26';
+    fg.refs.fgVixBadge.style.color = fgColor(vix?.score);
+    try {
+      const vixData = await vixRes.json();
+      if (vixRes.ok && vixData.price != null) {
+        fg.refs.fgVixValue.textContent = fmtNumber(vixData.price, 2);
+        const age = vixData.marketTime ? nowSec() - vixData.marketTime : null;
+        fg.refs.fgVixSub.textContent =
+          age != null
+            ? `야후 ^VIX 실시간 · ${agoText(age)}`
+            : '야후 ^VIX';
+      } else {
+        fg.refs.fgVixValue.textContent = vix?.lastValue != null ? fmtNumber(vix.lastValue, 2) : '—';
+        fg.refs.fgVixSub.textContent = 'CNN 데이터 값 (야후 조회 실패)';
+      }
+    } catch {
+      fg.refs.fgVixValue.textContent = vix?.lastValue != null ? fmtNumber(vix.lastValue, 2) : '—';
+      fg.refs.fgVixSub.textContent = 'CNN 데이터 값 (야후 조회 실패)';
+    }
+
+    // --- 하위 지표: 풋/콜 옵션 비율 강조 카드 ---
+    const putCall = fgData.subIndicators.putCall;
+    fg.refs.fgPutCallValue.textContent = putCall?.lastValue != null ? fmtNumber(putCall.lastValue, 3) : '—';
+    fg.refs.fgPutCallBadge.textContent = fgRatingKo(putCall?.rating);
+    fg.refs.fgPutCallBadge.style.background = fgColor(putCall?.score) + '26';
+    fg.refs.fgPutCallBadge.style.color = fgColor(putCall?.score);
+    fg.refs.fgPutCallSub.textContent = `CNN 점수 ${fmtNumber(putCall?.score, 1)}`;
+
+    // --- 나머지 5개 작은 하위 지표 카드 ---
+    for (const key of ['momentum', 'priceStrength', 'priceBreadth', 'junkBond', 'safeHaven']) {
+      const ind = fgData.subIndicators[key];
+      const scoreEl = fg.refs['fgSmallScore_' + key];
+      const badgeEl = fg.refs['fgSmallBadge_' + key];
+      if (!scoreEl || !badgeEl) continue;
+      scoreEl.textContent = fmtNumber(ind?.score, 1);
+      scoreEl.style.color = fgColor(ind?.score);
+      badgeEl.textContent = fgRatingKo(ind?.rating);
+      badgeEl.style.background = fgColor(ind?.score) + '26';
+      badgeEl.style.color = fgColor(ind?.score);
+    }
+  } catch (err) {
+    console.error('[공포탐욕지수] 갱신 실패:', err);
+    fg.refs.fgError.hidden = false;
+    fg.refs.fgUpdated.textContent = String(err.message || err).slice(0, 40);
+  }
 }
 
 // 한 leg('spot'|'fut')의 데이터를 가져온다.
@@ -621,3 +871,5 @@ tickClock();
 setInterval(tickClock, 1000);
 refreshAll();
 setInterval(refreshAll, REFRESH_MS);
+updateFearGreed();
+setInterval(updateFearGreed, FEARGREED_REFRESH_MS);

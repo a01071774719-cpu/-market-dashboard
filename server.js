@@ -367,6 +367,83 @@ app.get('/api/goldkimchi', async (_req, res) => {
   }
 });
 
+// ---- CNN Fear & Greed Index (비공식 엔드포인트) ----------------------------
+// production.dataviz.cnn.io 는 봇 차단(HTTP 418)이 있는데, Referer/Origin 을
+// CNN 자체 페이지처럼 넣어주면 통과한다. (User-Agent 는 YH_HEADERS 재사용)
+function fearGreedStartDate() {
+  const d = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000); // 1년 전
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// 하위 지표 하나에서 (CNN 점수, 등급, 실제 원시값)만 뽑아낸다.
+function pickIndicator(obj) {
+  if (!obj) return null;
+  const data = Array.isArray(obj.data) ? obj.data : [];
+  const last = data.length ? data[data.length - 1] : null;
+  return {
+    score: obj.score,
+    rating: obj.rating,
+    timestamp: obj.timestamp,
+    lastValue: last ? last.y : null, // 해당 지표의 실제(원시) 수치
+  };
+}
+
+app.get('/api/feargreed', async (_req, res) => {
+  const url =
+    `https://production.dataviz.cnn.io/index/fearandgreed/graphdata/${fearGreedStartDate()}`;
+  try {
+    const j = await fetchJson(url, {
+      timeoutMs: 10000,
+      headers: {
+        Accept: 'application/json, text/plain, */*',
+        Referer: 'https://edition.cnn.com/markets/fear-and-greed',
+        Origin: 'https://edition.cnn.com',
+      },
+    });
+
+    const fg = j.fear_and_greed;
+    if (!fg || typeof fg.score !== 'number') throw new Error('fear_and_greed 필드 없음');
+
+    const historical = Array.isArray(j.fear_and_greed_historical?.data)
+      ? j.fear_and_greed_historical.data.map((p) => ({
+          time: Math.floor(p.x / 1000),
+          value: p.y,
+        }))
+      : [];
+
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      available: true,
+      main: {
+        score: fg.score,
+        rating: fg.rating,
+        timestamp: fg.timestamp,
+        previousClose: fg.previous_close,
+        previous1Week: fg.previous_1_week,
+        previous1Month: fg.previous_1_month,
+        previous1Year: fg.previous_1_year,
+      },
+      historical,
+      subIndicators: {
+        momentum: pickIndicator(j.market_momentum_sp500),
+        priceStrength: pickIndicator(j.stock_price_strength),
+        priceBreadth: pickIndicator(j.stock_price_breadth),
+        putCall: pickIndicator(j.put_call_options),
+        vix: pickIndicator(j.market_volatility_vix),
+        junkBond: pickIndicator(j.junk_bond_demand),
+        safeHaven: pickIndicator(j.safe_haven_demand),
+      },
+      fetchedAt: Math.floor(Date.now() / 1000),
+    });
+  } catch (e) {
+    console.error('[feargreed] CNN 데이터 조회 실패:', e && e.message ? e.message : e);
+    res.status(502).json({ available: false, error: String((e && e.message) || e) });
+  }
+});
+
 // 개발 중 app.js/스타일이 자주 바뀌므로 브라우저가 옛 버전을 캐시해
 // "탭이 안 눌리는 것처럼" 보이는 문제를 막기 위해 정적 파일은 캐시하지 않는다.
 app.use(

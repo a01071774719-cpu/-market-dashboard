@@ -367,6 +367,61 @@ app.get('/api/goldkimchi', async (_req, res) => {
   }
 });
 
+// ---- 원/달러 환율: 야후 KRW=X 우선 + 네이버 매매기준율 안전장치 -------------
+// 과거 야후 KRW=X 가 순간적으로 실제 환율과 크게 어긋난 값을 준 사례가 있어,
+// 네이버 매매기준율(금치프리미엄에서 이미 쓰는 소스)과 비교해 2% 이상 벗어나면
+// 그 시점만 네이버 값으로 대체한다. 캔들 차트(series)는 항상 야후 데이터를 쓴다.
+const FX_KRW_SANITY_THRESHOLD = 0.02; // 2%
+
+app.get('/api/fx-krw', async (req, res) => {
+  const range = req.query.range || '1d';
+  const interval = req.query.interval || '5m';
+  try {
+    const yahoo = parseChart(await fetchYahooChart('KRW=X', range, interval));
+
+    let naverRate = null;
+    let naverTradedAt = null;
+    let naverError = null;
+    try {
+      const nf = await getNaverUsdKrw();
+      naverRate = nf.rate;
+      naverTradedAt = nf.tradedAt;
+    } catch (e) {
+      naverError = String((e && e.message) || e);
+    }
+
+    let price = yahoo.price;
+    let source = 'yahoo';
+    let overridden = false;
+    if (naverRate != null && yahoo.price != null) {
+      const diffPct = Math.abs(yahoo.price - naverRate) / naverRate;
+      if (diffPct > FX_KRW_SANITY_THRESHOLD) {
+        console.error(
+          `[fx-krw] 야후 KRW=X(${yahoo.price})가 네이버 환율(${naverRate})과 ` +
+            `${(diffPct * 100).toFixed(1)}% 괴리 → 네이버 값으로 대체`
+        );
+        price = naverRate;
+        source = 'naver';
+        overridden = true;
+      }
+    }
+
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      ...yahoo,
+      price,
+      source, // 'yahoo' | 'naver'
+      overridden, // 안전장치 발동 여부
+      yahooPrice: yahoo.price, // 참고: 원래 야후 값
+      naverRate,
+      naverTradedAt,
+      naverError,
+    });
+  } catch (e) {
+    res.status(502).json({ error: String((e && e.message) || e) });
+  }
+});
+
 // ---- CNN Fear & Greed Index (비공식 엔드포인트) ----------------------------
 // production.dataviz.cnn.io 는 봇 차단(HTTP 418)이 있는데, Referer/Origin 을
 // CNN 자체 페이지처럼 넣어주면 통과한다. (User-Agent 는 YH_HEADERS 재사용)

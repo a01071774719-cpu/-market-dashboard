@@ -22,6 +22,21 @@ const SECTIONS = [
     ],
   },
   {
+    id: 'fx',
+    title: '환율',
+    tabLabel: '환율',
+    items: [
+      { key: 'dxy', name: '달러인덱스', type: 'quote',
+        symbol: 'DX-Y.NYB', unit: '', label: '달러인덱스 (DX-Y.NYB)', digits: 2 },
+      { key: 'usdkrw', name: '원/달러 환율', type: 'fx-krw',
+        symbol: 'KRW=X', unit: '₩', label: 'USD/KRW (KRW=X)', digits: 2 },
+      { key: 'usdjpy', name: '엔/달러 환율', type: 'quote',
+        symbol: 'JPY=X', unit: '¥', label: 'USD/JPY (JPY=X)', digits: 2 },
+      { key: 'krwjpy', name: '원/엔 환율', type: 'quote', scale: 100,
+        symbol: 'JPYKRW=X', unit: '₩', label: '100엔당 원화 (JPYKRW=X×100)', digits: 2 },
+    ],
+  },
+  {
     id: 'indices',
     title: '지수',
     tabLabel: '지수',
@@ -71,6 +86,14 @@ const SECTIONS = [
     title: '공포탐욕지수',
     tabLabel: '공포탐욕지수',
     custom: 'feargreed', // 일반 카드 그리드가 아닌 전용 레이아웃
+    items: [],
+  },
+  {
+    id: 'easyinvesting',
+    title: '이지인베스팅',
+    tabLabel: '이지인베스팅',
+    custom: 'linkout', // 데이터 카드 없이 외부 앱으로 연결하는 탭
+    externalUrl: 'https://easyinvesting.app',
     items: [],
   },
 ];
@@ -130,9 +153,9 @@ function isPaired(item) {
 function legConf(item, leg) {
   if (item.spot) {
     const c = (leg === 'fut' ? item.fut : item.spot) || item.spot;
-    return { symbol: c.symbol, label: c.label, unit: item.unit, digits: item.digits };
+    return { symbol: c.symbol, label: c.label, unit: item.unit, digits: item.digits, scale: item.scale || 1 };
   }
-  return { symbol: item.symbol, label: item.label, unit: item.unit, digits: item.digits };
+  return { symbol: item.symbol, label: item.label, unit: item.unit, digits: item.digits, scale: item.scale || 1 };
 }
 
 // ---- 차트 헬퍼 -------------------------------------------------------------
@@ -244,6 +267,10 @@ function buildSections() {
 
     if (section.custom === 'feargreed') {
       buildFearGreedPanel(sec);
+      continue;
+    }
+    if (section.custom === 'linkout') {
+      buildLinkoutPanel(sec, section);
       continue;
     }
 
@@ -457,12 +484,14 @@ function buildFearGreedPanel(sec) {
         <div class="fg-featured-value" data-ref="fgVixValue">--</div>
         <div class="fg-featured-badge" data-ref="fgVixBadge">--</div>
         <div class="fg-featured-sub" data-ref="fgVixSub"></div>
+        <div class="card-hint">클릭하면 Yahoo Finance에서 자세히 보기 ↗</div>
       </div>
       <div class="card fg-featured" data-ref="fgPutCallCard">
         <div class="card-name">풋/콜 옵션 비율</div>
         <div class="fg-featured-value" data-ref="fgPutCallValue">--</div>
         <div class="fg-featured-badge" data-ref="fgPutCallBadge">--</div>
         <div class="fg-featured-sub" data-ref="fgPutCallSub"></div>
+        <div class="card-hint">클릭하면 CNN Fear &amp; Greed 페이지 보기 ↗</div>
       </div>
     </div>
 
@@ -471,6 +500,16 @@ function buildFearGreedPanel(sec) {
   sec.appendChild(wrap);
 
   fg.refs = collectRefs(wrap);
+
+  // VIX 카드 → 야후 파이낸스 ^VIX 페이지, 풋/콜 카드 → CNN Fear & Greed 페이지
+  // (풋/콜 비율은 야후에 대응 심볼이 없어 데이터 출처인 CNN 페이지로 연결)
+  fg.refs.fgVixCard.addEventListener('click', () => {
+    window.open('https://finance.yahoo.com/quote/%5EVIX', '_blank', 'noopener');
+  });
+  fg.refs.fgPutCallCard.addEventListener('click', () => {
+    window.open('https://edition.cnn.com/markets/fear-and-greed', '_blank', 'noopener');
+  });
+
   fg.chart = makeChart(fg.refs.fgChart);
   fg.chart.timeScale().applyOptions({ timeVisible: false });
   fg.series = fg.chart.addLineSeries({
@@ -552,10 +591,9 @@ async function updateFearGreed() {
       if (vixRes.ok && vixData.price != null) {
         fg.refs.fgVixValue.textContent = fmtNumber(vixData.price, 2);
         const age = vixData.marketTime ? nowSec() - vixData.marketTime : null;
+        const freshWord = age == null ? '' : age <= LIVE_THRESHOLD_S ? '실시간' : '지연';
         fg.refs.fgVixSub.textContent =
-          age != null
-            ? `야후 ^VIX 실시간 · ${agoText(age)}`
-            : '야후 ^VIX';
+          age != null ? `야후 ^VIX ${freshWord} · ${agoText(age)}` : '야후 ^VIX';
       } else {
         fg.refs.fgVixValue.textContent = vix?.lastValue != null ? fmtNumber(vix.lastValue, 2) : '—';
         fg.refs.fgVixSub.textContent = 'CNN 데이터 값 (야후 조회 실패)';
@@ -592,11 +630,39 @@ async function updateFearGreed() {
   }
 }
 
+// ---- 외부 앱 연결 전용 탭 (예: 이지인베스팅) --------------------------------
+// 서드파티 SPA 는 iframe 안에서 정상 동작을 보장할 수 없어(프레임 차단 스크립트,
+// 상대경로 깨짐 등) 데이터를 끌어오지 않고 새 탭으로 여는 링크 카드만 둔다.
+function buildLinkoutPanel(sec, section) {
+  const wrap = document.createElement('div');
+  wrap.className = 'linkout-panel';
+  wrap.innerHTML = `
+    <div class="card linkout-card">
+      <div class="linkout-icon">↗</div>
+      <div class="linkout-title">${section.title}</div>
+      <div class="linkout-desc">외부 웹앱으로 이동합니다 (새 탭에서 열림)</div>
+      <button type="button" class="linkout-btn" data-ref="linkoutBtn">${section.title} 열기 ↗</button>
+      <div class="linkout-url" data-ref="linkoutUrl"></div>
+    </div>
+  `;
+  sec.appendChild(wrap);
+
+  const refs = collectRefs(wrap);
+  refs.linkoutUrl.textContent = section.externalUrl;
+  const open = () => window.open(section.externalUrl, '_blank', 'noopener');
+  refs.linkoutBtn.addEventListener('click', open);
+  wrap.querySelector('.linkout-card').addEventListener('click', (e) => {
+    if (e.target.closest('.linkout-btn')) return; // 버튼 클릭은 위에서 이미 처리(중복 방지)
+    open();
+  });
+}
+
 // 한 leg('spot'|'fut')의 데이터를 가져온다.
 async function fetchLeg(item, leg) {
   const conf = legConf(item, leg);
   const { interval } = RANGE_INTERVAL[state.range];
-  const base = item.type === 'index' ? '/api/index' : '/api/chart';
+  const base =
+    item.type === 'index' ? '/api/index' : item.type === 'fx-krw' ? '/api/fx-krw' : '/api/chart';
   const url = `${base}?symbol=${encodeURIComponent(conf.symbol)}&range=${state.range}&interval=${interval}`;
   const res = await fetch(url);
   const data = await res.json();
@@ -649,17 +715,26 @@ async function updateCandle(key) {
       card.refs.autobadge.hidden = true;
     }
 
-    // --- 출처 배지 (index 전용) ---
+    // --- 출처 배지 (index / fx-krw 전용) ---
     if (item.type === 'index') {
       const src = data.source === 'investing' ? '인베스팅' : '야후';
       card.refs.source.hidden = false;
       card.refs.source.textContent = src;
       card.refs.source.className = `source-badge ${data.source === 'investing' ? 'inv' : 'yh'}`;
+    } else if (item.type === 'fx-krw') {
+      // 평소엔 야후, 야후 값이 네이버 환율과 2% 이상 어긋날 때만 "네이버 대체"로 표시
+      const src = data.source === 'naver' ? '네이버 대체' : '야후';
+      card.refs.source.hidden = false;
+      card.refs.source.textContent = src;
+      card.refs.source.className = `source-badge ${data.source === 'naver' ? 'inv' : 'yh'}`;
     }
 
     // --- 가격 / 등락 ---
-    const price = data.price;
-    const prev = data.previousClose;
+    // scale: 원단위가 너무 작은 심볼(예: 원/엔 JPYKRW=X)을 한국 관행대로
+    // "100엔당 원화" 처럼 배율을 곱해 표시하기 위함 (기본값 1, 등락률(%)엔 영향 없음)
+    const scale = conf.scale || 1;
+    const price = data.price != null ? data.price * scale : data.price;
+    const prev = data.previousClose != null ? data.previousClose * scale : data.previousClose;
     const diff = price != null && prev != null ? price - prev : null;
     const pct = diff != null && prev ? (diff / prev) * 100 : null;
     const unit = conf.unit;
@@ -689,7 +764,13 @@ async function updateCandle(key) {
       for (const p of data.series) {
         if (seen.has(p.time)) continue;
         seen.add(p.time);
-        points.push({ time: p.time, open: p.open, high: p.high, low: p.low, close: p.close });
+        points.push({
+          time: p.time,
+          open: p.open * scale,
+          high: p.high * scale,
+          low: p.low * scale,
+          close: p.close * scale,
+        });
       }
       card.series.setData(points);
       card.chart.timeScale().applyOptions({ timeVisible: intraday });

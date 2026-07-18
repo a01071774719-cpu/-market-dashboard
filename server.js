@@ -594,8 +594,8 @@ async function fetchGoogleNews(query) {
 // 섹션별 뉴스 소스 매핑
 const NEWS_SOURCES = {
   bonds: {
-    yahoo: ['^TNX', 'ZN=F'],
-    google: ['미국 국채 금리', '연준 금리'],
+    yahoo: ['^TNX', 'ZN=F', '^TYX', '30Y=F'],
+    google: ['미국 국채 금리', '연준 금리', '30년물 국채'],
   },
   fx: {
     yahoo: ['KRW=X', 'DX-Y.NYB'],

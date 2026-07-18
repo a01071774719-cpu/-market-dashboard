@@ -15,9 +15,10 @@ const SECTIONS = [
     tabLabel: '채권',
     newsCategory: 'bonds', // 카드 아래 "관련 뉴스" 섹션에 쓸 /api/news category
     items: [
-      { key: 'us10y', name: '미국 10년물 국채 금리', type: 'quote', unit: '%', digits: 3,
-        spot: { symbol: '^TNX', label: '10년물 금리 (^TNX)' },
-        fut: { symbol: '10Y=F', label: '10년물 금리 선물 (10Y=F)' } },
+      { key: 'us30y', name: '미국 30년물 국채 금리', type: 'quote',
+        symbol: '^TYX', unit: '%', label: '30년물 국채 수익률 (^TYX)', digits: 3 },
+      { key: 'us10y', name: '미국 10년물 국채 금리', type: 'quote',
+        symbol: '^TNX', unit: '%', label: '10년물 국채 수익률 (^TNX)', digits: 3 },
       { key: 'us2y', name: '미국 2년물 국채 금리', type: 'quote',
         symbol: '2YY=F', unit: '%', label: '2년물 금리 (2YY=F · 수익률 선물)', digits: 3 },
     ],

@@ -499,6 +499,176 @@ app.get('/api/feargreed', async (_req, res) => {
   }
 });
 
+// ---- 뉴스 탭: RSS 피드 (야후 파이낸스 + 구글 뉴스, API 키 불필요) ------------
+// RSS 는 구조가 단순해서 별도 XML 파서 라이브러리 없이 정규식으로 파싱한다.
+
+async function fetchText(url, opts = {}) {
+  const timeoutMs = opts.timeoutMs || 8000;
+  const headers = { ...YH_HEADERS, ...(opts.headers || {}) };
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { headers, signal: ctrl.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.text();
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+// HTML/XML 흔한 엔티티만 간단히 디코딩 (전체 엔티티 테이블은 필요 없음)
+function decodeEntities(s) {
+  if (!s) return s;
+  return s
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .trim();
+}
+
+function extractTag(block, tag) {
+  const m = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'i'));
+  return m ? decodeEntities(m[1]) : null;
+}
+
+// RSS 2.0 <item> 목록을 {title, link, pubDate, source} 배열로 파싱한다.
+function parseRss(xml, defaultSource) {
+  const blocks = xml.match(/<item\b[\s\S]*?<\/item>/gi) || [];
+  const items = [];
+  for (const block of blocks) {
+    let title = extractTag(block, 'title');
+    const link = extractTag(block, 'link');
+    const pubDate = extractTag(block, 'pubDate');
+    if (!title || !link) continue;
+
+    const srcMatch = block.match(/<source[^>]*>([^<]*)<\/source>/i);
+    let source = srcMatch ? decodeEntities(srcMatch[1]) : defaultSource;
+
+    // 구글 뉴스는 제목 끝에 " - 출처명" 이 중복으로 붙어 있어 잘라낸다.
+    if (source && title.endsWith(` - ${source}`)) {
+      title = title.slice(0, -(` - ${source}`.length)).trim();
+    }
+
+    const ts = pubDate ? Date.parse(pubDate) : NaN;
+    items.push({
+      title,
+      link: link.trim(),
+      source: source || defaultSource,
+      timestamp: isNaN(ts) ? null : Math.floor(ts / 1000),
+    });
+  }
+  return items;
+}
+
+async function fetchYahooNews(symbol) {
+  try {
+    const xml = await fetchText(
+      `https://finance.yahoo.com/rss/headline?s=${encodeURIComponent(symbol)}`,
+      { timeoutMs: 8000 }
+    );
+    return parseRss(xml, 'Yahoo Finance');
+  } catch {
+    return [];
+  }
+}
+
+async function fetchGoogleNews(query) {
+  try {
+    const url =
+      `https://news.google.com/rss/search?q=${encodeURIComponent(query)}` +
+      `&hl=ko&gl=KR&ceid=KR:ko`;
+    const xml = await fetchText(url, { timeoutMs: 8000 });
+    return parseRss(xml, '구글 뉴스');
+  } catch {
+    return [];
+  }
+}
+
+// 섹션별 뉴스 소스 매핑
+const NEWS_SOURCES = {
+  bonds: {
+    yahoo: ['^TNX', 'ZN=F'],
+    google: ['미국 국채 금리', '연준 금리'],
+  },
+  fx: {
+    yahoo: ['KRW=X', 'DX-Y.NYB'],
+    google: ['달러 원 환율', '달러인덱스'],
+  },
+  indices: {
+    yahoo: ['^GSPC', '^NDX', '^KS11'],
+    google: ['코스피', '나스닥 지수'],
+  },
+  commodities: {
+    yahoo: ['GC=F', 'SI=F', 'BTC-USD', 'ETH-USD'],
+    google: ['국제 금값', '비트코인 시세'],
+  },
+  premium: {
+    yahoo: [],
+    google: ['김치프리미엄', '국내 금 가격'],
+  },
+};
+
+// 제목 기준 간단 중복 제거(공백/기호 무시하고 소문자 비교)
+function normalizeTitle(t) {
+  return t.toLowerCase().replace(/[\s\W]+/g, '');
+}
+function dedupeNews(items) {
+  const seen = new Set();
+  const out = [];
+  for (const it of items) {
+    const key = normalizeTitle(it.title);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(it);
+  }
+  return out;
+}
+
+const NEWS_CACHE = new Map(); // category -> { at, data }
+const NEWS_CACHE_TTL_MS = 4 * 60 * 1000; // 4분 (프론트 5분 폴링보다 살짝 짧게)
+
+app.get('/api/news', async (req, res) => {
+  const category = req.query.category;
+  const src = NEWS_SOURCES[category];
+  if (!src) {
+    return res.status(400).json({ error: `알 수 없는 category: ${category}` });
+  }
+
+  const cached = NEWS_CACHE.get(category);
+  if (cached && Date.now() - cached.at < NEWS_CACHE_TTL_MS) {
+    res.set('Cache-Control', 'no-store');
+    return res.json(cached.data);
+  }
+
+  try {
+    const [yahooResults, googleResults] = await Promise.all([
+      Promise.all(src.yahoo.map((sym) => fetchYahooNews(sym))),
+      Promise.all(src.google.map((q) => fetchGoogleNews(q))),
+    ]);
+    const merged = [...yahooResults.flat(), ...googleResults.flat()];
+    const deduped = dedupeNews(merged);
+    deduped.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    const items = deduped.slice(0, 8);
+
+    const payload = {
+      category,
+      items,
+      fetchedAt: Math.floor(Date.now() / 1000),
+    };
+    NEWS_CACHE.set(category, { at: Date.now(), data: payload });
+    res.set('Cache-Control', 'no-store');
+    res.json(payload);
+  } catch (e) {
+    console.error(`[news] ${category} 조회 실패:`, e && e.message ? e.message : e);
+    res.status(502).json({ error: String((e && e.message) || e) });
+  }
+});
+
 // 개발 중 app.js/스타일이 자주 바뀌므로 브라우저가 옛 버전을 캐시해
 // "탭이 안 눌리는 것처럼" 보이는 문제를 막기 위해 정적 파일은 캐시하지 않는다.
 app.use(

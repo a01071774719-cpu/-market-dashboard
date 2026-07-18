@@ -96,7 +96,24 @@ const SECTIONS = [
     externalUrl: 'https://easyinvesting.app',
     items: [],
   },
+  {
+    id: 'news',
+    title: '뉴스',
+    tabLabel: '뉴스',
+    custom: 'news', // 섹션별 RSS 헤드라인 목록
+    items: [],
+  },
 ];
+
+// 뉴스 섹션 구성 (백엔드 /api/news 의 category 값과 1:1 대응)
+const NEWS_CATEGORIES = [
+  { key: 'bonds', label: '채권' },
+  { key: 'fx', label: '환율' },
+  { key: 'indices', label: '지수' },
+  { key: 'commodities', label: '원자재' },
+  { key: 'premium', label: '프리미엄' },
+];
+const NEWS_REFRESH_MS = 5 * 60 * 1000; // 5분 (시세보다 느긋하게)
 
 const ALL_ITEMS = SECTIONS.flatMap((s) => s.items);
 
@@ -271,6 +288,10 @@ function buildSections() {
     }
     if (section.custom === 'linkout') {
       buildLinkoutPanel(sec, section);
+      continue;
+    }
+    if (section.custom === 'news') {
+      buildNewsPanel(sec);
       continue;
     }
 
@@ -653,6 +674,85 @@ function buildLinkoutPanel(sec, section) {
   });
 }
 
+// ---- 뉴스 탭 (섹션별 RSS 헤드라인) ------------------------------------------
+const news = { refs: {} };
+
+function buildNewsPanel(sec) {
+  const wrap = document.createElement('div');
+  wrap.className = 'news-panel';
+  wrap.innerHTML = NEWS_CATEGORIES.map(
+    (c) => `
+      <div class="news-group">
+        <h3 class="news-group-title">${c.label}</h3>
+        <ul class="news-list" data-ref="newsList_${c.key}">
+          <li class="news-empty">불러오는 중…</li>
+        </ul>
+      </div>`
+  ).join('');
+  sec.appendChild(wrap);
+  news.refs = collectRefs(wrap);
+}
+
+// 뉴스 목록에 안내 문구 한 줄만 표시(로딩/빈 목록/오류 공용)
+function setNewsListMessage(listEl, msg) {
+  listEl.innerHTML = '';
+  const li = document.createElement('li');
+  li.className = 'news-empty';
+  li.textContent = msg;
+  listEl.appendChild(li);
+}
+
+// 뉴스 1건을 <li><a> 로 만든다. 외부(RSS) 콘텐츠라 innerHTML 대신
+// textContent 로 채워 넣어 XSS 위험 없이 안전하게 렌더링한다.
+function buildNewsItemEl(item) {
+  const li = document.createElement('li');
+  li.className = 'news-item';
+
+  const a = document.createElement('a');
+  a.className = 'news-link';
+  a.href = item.link;
+  a.target = '_blank';
+  a.rel = 'noopener';
+
+  const titleEl = document.createElement('div');
+  titleEl.className = 'news-title';
+  titleEl.textContent = item.title;
+
+  const metaEl = document.createElement('div');
+  metaEl.className = 'news-meta';
+  const age = item.timestamp != null ? agoText(nowSec() - item.timestamp) : '';
+  metaEl.textContent = [item.source, age].filter(Boolean).join(' · ');
+
+  a.appendChild(titleEl);
+  a.appendChild(metaEl);
+  li.appendChild(a);
+  return li;
+}
+
+async function updateNews() {
+  await Promise.all(
+    NEWS_CATEGORIES.map(async (c) => {
+      const listEl = news.refs['newsList_' + c.key];
+      if (!listEl) return; // 뉴스 탭을 아직 한 번도 안 열었으면 패널이 없을 수 있음
+      try {
+        const res = await fetch(`/api/news?category=${c.key}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        const items = Array.isArray(data.items) ? data.items.slice(0, 5) : [];
+        if (!items.length) {
+          setNewsListMessage(listEl, '관련 뉴스를 찾을 수 없음');
+          return;
+        }
+        listEl.innerHTML = '';
+        items.forEach((it) => listEl.appendChild(buildNewsItemEl(it)));
+      } catch (err) {
+        console.error(`[뉴스] ${c.key} 갱신 실패:`, err);
+        setNewsListMessage(listEl, '일시적으로 뉴스를 가져올 수 없음');
+      }
+    })
+  );
+}
+
 // 한 leg('spot'|'fut')의 데이터를 가져온다.
 async function fetchLeg(item, leg) {
   const conf = legConf(item, leg);
@@ -950,3 +1050,5 @@ refreshAll();
 setInterval(refreshAll, REFRESH_MS);
 updateFearGreed();
 setInterval(updateFearGreed, FEARGREED_REFRESH_MS);
+updateNews();
+setInterval(updateNews, NEWS_REFRESH_MS);

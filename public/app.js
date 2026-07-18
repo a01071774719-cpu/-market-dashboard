@@ -13,6 +13,7 @@ const SECTIONS = [
     id: 'rates',
     title: '국채 금리',
     tabLabel: '채권',
+    newsCategory: 'bonds', // 카드 아래 "관련 뉴스" 섹션에 쓸 /api/news category
     items: [
       { key: 'us10y', name: '미국 10년물 국채 금리', type: 'quote', unit: '%', digits: 3,
         spot: { symbol: '^TNX', label: '10년물 금리 (^TNX)' },
@@ -25,6 +26,7 @@ const SECTIONS = [
     id: 'fx',
     title: '환율',
     tabLabel: '환율',
+    newsCategory: 'fx',
     items: [
       { key: 'dxy', name: '달러인덱스', type: 'quote',
         symbol: 'DX-Y.NYB', unit: '', label: '달러인덱스 (DX-Y.NYB)', digits: 2 },
@@ -40,6 +42,7 @@ const SECTIONS = [
     id: 'indices',
     title: '지수',
     tabLabel: '지수',
+    newsCategory: 'indices',
     toggle: true, // 지수/선물 토글은 이 섹션에만 적용
     items: [
       { key: 'us500', name: 'US 500', type: 'index', unit: '', digits: 2,
@@ -57,11 +60,14 @@ const SECTIONS = [
     id: 'commodities',
     title: '원자재',
     tabLabel: '원자재',
+    newsCategory: 'commodities',
     items: [
       { key: 'gold', name: '금', type: 'quote',
         symbol: 'GC=F', unit: '$', label: '금 선물 (GC=F, USD/oz)', digits: 2 },
       { key: 'silver', name: '은', type: 'quote',
         symbol: 'SI=F', unit: '$', label: '은 선물 (SI=F, USD/oz)', digits: 3 },
+      { key: 'wti', name: '원유 (WTI)', type: 'quote',
+        symbol: 'CL=F', unit: '$', label: 'WTI 원유 선물 (CL=F, USD/배럴)', digits: 2 },
       { key: 'btc', name: '비트코인', type: 'quote',
         symbol: 'BTC-USD', unit: '$', label: '비트코인 (BTC-USD)', digits: 2 },
       { key: 'eth', name: '이더리움', type: 'quote',
@@ -72,6 +78,7 @@ const SECTIONS = [
     id: 'premium',
     title: '프리미엄',
     tabLabel: '프리미엄',
+    newsCategory: 'premium',
     items: [
       { key: 'kimchi', name: '김치프리미엄', type: 'premium', kind: 'kimchi',
         endpoint: '/api/kimchi',
@@ -96,23 +103,12 @@ const SECTIONS = [
     externalUrl: 'https://easyinvesting.app',
     items: [],
   },
-  {
-    id: 'news',
-    title: '뉴스',
-    tabLabel: '뉴스',
-    custom: 'news', // 섹션별 RSS 헤드라인 목록
-    items: [],
-  },
 ];
 
-// 뉴스 섹션 구성 (백엔드 /api/news 의 category 값과 1:1 대응)
-const NEWS_CATEGORIES = [
-  { key: 'bonds', label: '채권' },
-  { key: 'fx', label: '환율' },
-  { key: 'indices', label: '지수' },
-  { key: 'commodities', label: '원자재' },
-  { key: 'premium', label: '프리미엄' },
-];
+// 뉴스: 독립 탭이 아니라 각 섹션(section.newsCategory) 카드 아래에 붙는다.
+// /api/news 는 이제 개수를 자르지 않고 중요도 임계값을 넘는 것만 돌려주므로
+// 프론트에서도 받은 만큼 전부 그린다(추가 slice 없음).
+const NEWS_CATEGORY_KEYS = SECTIONS.filter((s) => s.newsCategory).map((s) => s.newsCategory);
 const NEWS_REFRESH_MS = 5 * 60 * 1000; // 5분 (시세보다 느긋하게)
 
 const ALL_ITEMS = SECTIONS.flatMap((s) => s.items);
@@ -130,7 +126,7 @@ const REFRESH_MS = 20000; // 20초 폴링
 const LIVE_THRESHOLD_S = 90; // 데이터가 90초 이내면 "실시간"으로 간주
 
 // mode: 'auto'(지연 시 선물 자동전환) | 'spot'(지수 고정) | 'fut'(선물 고정)
-const state = { mode: 'auto', range: '1d', tab: 'indices' }; // 기본 탭: 지수, 기본 모드: 자동
+const state = { mode: 'auto', range: '1d', tab: 'indices', view: 'cards' }; // 기본 탭: 지수, 기본 모드: 자동, 기본 뷰: 시세
 const cards = {}; // key -> { item, el, chart, series, refs, trend? }
 
 // ---- 유틸 ------------------------------------------------------------------
@@ -234,6 +230,7 @@ function showTab(tabId) {
   document.querySelectorAll('.market-section').forEach((sec) => {
     sec.hidden = sec.dataset.section !== tabId;
   });
+  syncViewControls();
   // 숨겨졌다 보이는 순간 차트가 0px 로 잡혀 있을 수 있으니 다시 맞춘다.
   if (tabId === 'feargreed' && fg.chart) {
     try {
@@ -251,6 +248,30 @@ function showTab(tabId) {
       }
     }
   }
+}
+
+// 현재 탭에 뉴스가 있는지에 따라 "시세/뉴스" 토글과 기간 버튼의 노출을 맞춘다.
+function syncViewControls() {
+  const activeSection = SECTIONS.find((s) => s.id === state.tab);
+  const hasNews = !!(activeSection && activeSection.newsCategory);
+  const viewToggle = document.getElementById('viewToggle');
+  const rangeGroup = document.getElementById('rangeButtonsGroup');
+  if (viewToggle) viewToggle.hidden = !hasNews;
+  // 뉴스 보기 중엔 "차트 기간"이 의미가 없으니 숨긴다.
+  if (rangeGroup) rangeGroup.hidden = hasNews && state.view === 'news';
+  applyViewMode();
+}
+
+// state.view('cards'|'news')에 따라 각 섹션의 카드 그리드 / 관련 뉴스 블록을 전환한다.
+function applyViewMode() {
+  document.querySelectorAll('.market-section').forEach((sec) => {
+    const grid = sec.querySelector(':scope > .grid');
+    const newsBlock = sec.querySelector(':scope > .news-block');
+    if (!grid && !newsBlock) return; // 공포탐욕지수/이지인베스팅 같은 전용 레이아웃은 대상 아님
+    const showNews = state.view === 'news';
+    if (grid) grid.hidden = showNews;
+    if (newsBlock) newsBlock.hidden = !showNews;
+  });
 }
 
 function buildSections() {
@@ -290,10 +311,6 @@ function buildSections() {
       buildLinkoutPanel(sec, section);
       continue;
     }
-    if (section.custom === 'news') {
-      buildNewsPanel(sec);
-      continue;
-    }
 
     const grid = document.createElement('div');
     grid.className = 'grid';
@@ -302,6 +319,11 @@ function buildSections() {
     for (const item of section.items) {
       if (item.type === 'premium') buildPremiumCard(grid, item);
       else buildCandleCard(grid, item);
+    }
+
+    // 카드들 아래에 이 섹션 주제의 "관련 뉴스" 블록을 붙인다.
+    if (section.newsCategory) {
+      buildSectionNewsBlock(sec, section.newsCategory);
     }
   }
 }
@@ -674,23 +696,20 @@ function buildLinkoutPanel(sec, section) {
   });
 }
 
-// ---- 뉴스 탭 (섹션별 RSS 헤드라인) ------------------------------------------
+// ---- 각 탭 하단 "관련 뉴스" 블록 --------------------------------------------
 const news = { refs: {} };
 
-function buildNewsPanel(sec) {
-  const wrap = document.createElement('div');
-  wrap.className = 'news-panel';
-  wrap.innerHTML = NEWS_CATEGORIES.map(
-    (c) => `
-      <div class="news-group">
-        <h3 class="news-group-title">${c.label}</h3>
-        <ul class="news-list" data-ref="newsList_${c.key}">
-          <li class="news-empty">불러오는 중…</li>
-        </ul>
-      </div>`
-  ).join('');
-  sec.appendChild(wrap);
-  news.refs = collectRefs(wrap);
+function buildSectionNewsBlock(sec, categoryKey) {
+  const block = document.createElement('div');
+  block.className = 'news-block';
+  block.innerHTML = `
+    <h3 class="news-block-title">관련 뉴스</h3>
+    <ul class="news-list" data-ref="newsList_${categoryKey}">
+      <li class="news-empty">불러오는 중…</li>
+    </ul>
+  `;
+  sec.appendChild(block);
+  Object.assign(news.refs, collectRefs(block));
 }
 
 // 뉴스 목록에 안내 문구 한 줄만 표시(로딩/빈 목록/오류 공용)
@@ -731,22 +750,23 @@ function buildNewsItemEl(item) {
 
 async function updateNews() {
   await Promise.all(
-    NEWS_CATEGORIES.map(async (c) => {
-      const listEl = news.refs['newsList_' + c.key];
-      if (!listEl) return; // 뉴스 탭을 아직 한 번도 안 열었으면 패널이 없을 수 있음
+    NEWS_CATEGORY_KEYS.map(async (categoryKey) => {
+      const listEl = news.refs['newsList_' + categoryKey];
+      if (!listEl) return; // 해당 탭을 아직 한 번도 안 열었으면 블록이 없을 수 있음
       try {
-        const res = await fetch(`/api/news?category=${c.key}`);
+        const res = await fetch(`/api/news?category=${categoryKey}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-        const items = Array.isArray(data.items) ? data.items.slice(0, 5) : [];
+        // 서버가 이미 중요도 임계값으로 걸러서 정렬해 주므로 그대로 전부 그린다.
+        const items = Array.isArray(data.items) ? data.items : [];
         if (!items.length) {
-          setNewsListMessage(listEl, '관련 뉴스를 찾을 수 없음');
+          setNewsListMessage(listEl, '지금은 특별히 중요한 뉴스가 없습니다');
           return;
         }
         listEl.innerHTML = '';
         items.forEach((it) => listEl.appendChild(buildNewsItemEl(it)));
       } catch (err) {
-        console.error(`[뉴스] ${c.key} 갱신 실패:`, err);
+        console.error(`[뉴스] ${categoryKey} 갱신 실패:`, err);
         setNewsListMessage(listEl, '일시적으로 뉴스를 가져올 수 없음');
       }
     })
@@ -1018,10 +1038,22 @@ function bindControls() {
     const btn = e.target.closest('button[data-range]');
     if (!btn) return;
     state.range = btn.dataset.range;
-    document.querySelectorAll('#rangeBar button').forEach((b) =>
+    document.querySelectorAll('#rangeButtonsGroup button').forEach((b) =>
       b.classList.toggle('active', b === btn)
     );
     refreshAll(true);
+  });
+
+  // 시세/뉴스 보기 전환 (기간 선택 옆)
+  const viewToggle = document.getElementById('viewToggle');
+  viewToggle.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-view]');
+    if (!btn) return;
+    state.view = btn.dataset.view;
+    viewToggle.querySelectorAll('button').forEach((b) =>
+      b.classList.toggle('active', b === btn)
+    );
+    syncViewControls();
   });
 
   // 지수/선물 토글 (섹션 2 헤더에 생성됨)
@@ -1044,6 +1076,7 @@ document.getElementById('refreshSec').textContent = String(REFRESH_MS / 1000);
 buildTabBar();
 buildSections();
 bindControls();
+syncViewControls();
 tickClock();
 setInterval(tickClock, 1000);
 refreshAll();

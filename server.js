@@ -546,8 +546,9 @@ function parseRss(xml, defaultSource) {
     const pubDate = extractTag(block, 'pubDate');
     if (!title || !link) continue;
 
-    const srcMatch = block.match(/<source[^>]*>([^<]*)<\/source>/i);
-    let source = srcMatch ? decodeEntities(srcMatch[1]) : defaultSource;
+    const srcMatch = block.match(/<source url="([^"]*)"[^>]*>([^<]*)<\/source>/i);
+    let source = srcMatch ? decodeEntities(srcMatch[2]) : defaultSource;
+    const sourceUrl = srcMatch ? srcMatch[1] : null;
 
     // 구글 뉴스는 제목 끝에 " - 출처명" 이 중복으로 붙어 있어 잘라낸다.
     if (source && title.endsWith(` - ${source}`)) {
@@ -559,6 +560,7 @@ function parseRss(xml, defaultSource) {
       title,
       link: link.trim(),
       source: source || defaultSource,
+      sourceUrl,
       timestamp: isNaN(ts) ? null : Math.floor(ts / 1000),
     });
   }
@@ -604,29 +606,145 @@ const NEWS_SOURCES = {
     google: ['코스피', '나스닥 지수'],
   },
   commodities: {
-    yahoo: ['GC=F', 'SI=F', 'BTC-USD', 'ETH-USD'],
-    google: ['국제 금값', '비트코인 시세'],
+    yahoo: ['GC=F', 'SI=F', 'CL=F', 'BTC-USD', 'ETH-USD'],
+    google: ['국제 금값', '국제 유가', 'WTI 원유', '비트코인 시세'],
   },
   premium: {
     yahoo: [],
-    google: ['김치프리미엄', '국내 금 가격'],
+    google: ['김치프리미엄', '국내 금시세 -vietnam.vn'],
   },
 };
 
-// 제목 기준 간단 중복 제거(공백/기호 무시하고 소문자 비교)
-function normalizeTitle(t) {
-  return t.toLowerCase().replace(/[\s\W]+/g, '');
-}
-function dedupeNews(items) {
-  const seen = new Set();
-  const out = [];
-  for (const it of items) {
-    const key = normalizeTitle(it.title);
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    out.push(it);
+// 검색어와 무관하게 계속 섞여 들어오는 저관련성 소스를 통째로 제외한다.
+// (예: 베트남 금시세를 여러 언어로 자동 번역해 퍼뜨리는 콘텐츠 파밍 사이트.
+//  "Vietnam.vn", "Laodong.vn" 등 소스명은 제각각이라도 도메인은 전부 .vn 이라
+//  소스명이 아니라 도메인 TLD 기준으로 걸러야 이름이 바뀌어도 계속 걸러진다.)
+const NEWS_TLD_BLOCKLIST = ['.vn'];
+function isBlockedSource(item) {
+  if (!item.sourceUrl) return false;
+  try {
+    const host = new URL(item.sourceUrl).hostname.toLowerCase();
+    return NEWS_TLD_BLOCKLIST.some((tld) => host.endsWith(tld));
+  } catch {
+    return false;
   }
-  return out;
+}
+
+// ---- 뉴스 중요도 스코어링 --------------------------------------------------
+// "개수를 정해두고 자르기"가 아니라, 아래 3가지로 점수를 매겨 임계값을 넘는
+// 뉴스만 (개수 제한 없이) 보여준다.
+//   1) 최신성 - 최근일수록 높은 점수 (12시간 반감기)
+//   2) 출처 신뢰도 - 로이터/블룸버그/연합뉴스 등 주요 언론사 가점
+//   3) 교차 출처 중복 - 여러 매체가 같은 이슈를 다루면 "정말 중요한 이슈"로
+//      보고 가장 큰 가중치를 준다.
+
+const SOURCE_CREDIBILITY_TIERS = [
+  {
+    score: 8,
+    patterns: [
+      /reuters/i, /bloomberg/i, /wall street journal|\bwsj\b/i, /cnbc/i,
+      /financial times|\bft\.com/i, /barron/i, /associated press|\bap\b/i,
+      /연합뉴스(?!tv)/i, /^yna\.co\.kr/i, /연합인포맥스/i,
+      /한국경제/i, /매일경제/i, /서울경제/i, /조선일보/i, /한겨레/i, /중앙일보/i,
+      /\bkbs\b/i, /\bmbc\b/i, /\bsbs\b/i, /\bytn\b/i, /파이낸셜뉴스/i,
+    ],
+  },
+  {
+    score: 4,
+    patterns: [
+      /yahoo finance/i, /marketwatch/i, /investing\.com/i, /머니투데이/i,
+      /아시아경제/i, /뉴시스/i, /뉴스1/i, /헤럴드경제/i, /이데일리/i,
+      /글로벌이코노믹/i, /디지털타임스/i, /전자신문/i, /이투데이/i,
+    ],
+  },
+];
+function sourceCredibility(source) {
+  const s = source || '';
+  for (const tier of SOURCE_CREDIBILITY_TIERS) {
+    if (tier.patterns.some((re) => re.test(s))) return tier.score;
+  }
+  return 0;
+}
+
+// 제목을 단어 집합으로 쪼갠다 (조사 몇 개만 대충 제거, 완벽한 형태소 분석 아님)
+const TITLE_STOPWORDS = new Set([
+  '이', '가', '은', '는', '을', '를', '의', '에', '에서', '으로', '로', '와',
+  '과', '도', '만', '까지', '부터', '등', '그', '및',
+]);
+function tokenizeTitle(title) {
+  const cleaned = title.replace(/[\[\]()「」『』''""·,.!?…\-–—:;]/g, ' ');
+  const tokens = new Set();
+  for (const w of cleaned.split(/\s+/)) {
+    const t = w.trim();
+    if (t.length >= 2 && !TITLE_STOPWORDS.has(t)) tokens.add(t.toLowerCase());
+  }
+  return tokens;
+}
+function jaccard(a, b) {
+  if (!a.size || !b.size) return 0;
+  let inter = 0;
+  for (const x of a) if (b.has(x)) inter++;
+  const union = a.size + b.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+
+// 제목 유사도로 "같은 이슈"를 묶는다 (야후+구글 합친 원시 목록 전체 대상)
+const CLUSTER_SIMILARITY_THRESHOLD = 0.45;
+function clusterNews(items) {
+  const clusters = [];
+  for (const it of items) {
+    const tokens = tokenizeTitle(it.title);
+    let best = null;
+    let bestSim = 0;
+    for (const c of clusters) {
+      const sim = jaccard(tokens, c.tokens);
+      if (sim > bestSim) {
+        bestSim = sim;
+        best = c;
+      }
+    }
+    if (best && bestSim >= CLUSTER_SIMILARITY_THRESHOLD) {
+      best.members.push(it);
+      const curCred = sourceCredibility(best.repItem.source);
+      const newCred = sourceCredibility(it.source);
+      if (newCred > curCred || (newCred === curCred && (it.timestamp || 0) > (best.repItem.timestamp || 0))) {
+        best.repItem = it; // 더 신뢰도 높은(동률이면 더 최신) 소스를 대표로
+      }
+    } else {
+      clusters.push({ repItem: it, tokens, members: [it] });
+    }
+  }
+  return clusters;
+}
+
+function recencyScore(timestamp) {
+  if (!timestamp) return 0;
+  const ageHours = Math.max(0, Date.now() / 1000 / 3600 - timestamp / 3600);
+  return 10 * Math.pow(0.5, ageHours / 12); // 12시간마다 절반으로 감쇠
+}
+
+// 최종 정렬용: "며칠 전"인지(24시간 단위 버킷). 0=오늘(24시간 이내),
+// 1=1~2일 전, 2=2~3일 전 ... 타임스탬프가 없으면 가장 오래된 것으로 취급.
+const NEWS_DAY_BUCKET_HOURS = 24;
+function dayBucket(timestamp) {
+  if (!timestamp) return Infinity;
+  const ageHours = Math.max(0, Date.now() / 1000 / 3600 - timestamp / 3600);
+  return Math.floor(ageHours / NEWS_DAY_BUCKET_HOURS);
+}
+
+// 교차 출처 중복(같은 이슈를 여러 매체가 다룸)에 가장 큰 가중치를 둔다.
+const DUPLICATE_SOURCE_WEIGHT = 6;
+const NEWS_SCORE_THRESHOLD = 14; // 이 값 미만은 "사소한 단신"으로 간주해 제외
+
+function scoreCluster(cluster) {
+  const distinctSources = new Set(cluster.members.map((m) => (m.source || '').toLowerCase()));
+  const bestTimestamp = Math.max(...cluster.members.map((m) => m.timestamp || 0));
+  const bestCredibility = Math.max(...cluster.members.map((m) => sourceCredibility(m.source)));
+  const duplicateBonus = (distinctSources.size - 1) * DUPLICATE_SOURCE_WEIGHT;
+  return {
+    score: recencyScore(bestTimestamp) + bestCredibility + duplicateBonus,
+    sourceCount: distinctSources.size,
+  };
 }
 
 const NEWS_CACHE = new Map(); // category -> { at, data }
@@ -650,14 +768,33 @@ app.get('/api/news', async (req, res) => {
       Promise.all(src.yahoo.map((sym) => fetchYahooNews(sym))),
       Promise.all(src.google.map((q) => fetchGoogleNews(q))),
     ]);
-    const merged = [...yahooResults.flat(), ...googleResults.flat()];
-    const deduped = dedupeNews(merged);
-    deduped.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-    const items = deduped.slice(0, 8);
+    const merged = [...yahooResults.flat(), ...googleResults.flat()].filter(
+      (it) => !isBlockedSource(it)
+    );
+
+    const clusters = clusterNews(merged);
+    const scored = clusters.map((c) => {
+      const { score, sourceCount } = scoreCluster(c);
+      return {
+        title: c.repItem.title,
+        link: c.repItem.link,
+        source: c.repItem.source,
+        timestamp: c.repItem.timestamp,
+        sourceCount,
+        score: Math.round(score * 10) / 10,
+      };
+    });
+    scored.sort((a, b) => {
+      const bucketDiff = dayBucket(a.timestamp) - dayBucket(b.timestamp);
+      if (bucketDiff !== 0) return bucketDiff; // 최신 날짜 그룹 먼저
+      return b.score - a.score; // 같은 날짜 그룹 내에서는 중요도 높은 순
+    });
+    const items = scored.filter((s) => s.score >= NEWS_SCORE_THRESHOLD);
 
     const payload = {
       category,
       items,
+      totalCandidates: scored.length,
       fetchedAt: Math.floor(Date.now() / 1000),
     };
     NEWS_CACHE.set(category, { at: Date.now(), data: payload });

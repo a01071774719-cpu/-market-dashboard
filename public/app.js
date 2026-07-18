@@ -14,6 +14,7 @@ const SECTIONS = [
     title: '국채 금리',
     tabLabel: '채권',
     newsCategory: 'bonds', // 카드 아래 "관련 뉴스" 섹션에 쓸 /api/news category
+    bondYieldCurve: true, // 2년물 카드 옆에 수익률 곡선 그래프를 붙인다
     items: [
       { key: 'us30y', name: '미국 30년물 국채 금리', type: 'quote',
         symbol: '^TYX', unit: '%', label: '30년물 국채 수익률 (^TYX)', digits: 3,
@@ -33,13 +34,17 @@ const SECTIONS = [
     newsCategory: 'fx',
     items: [
       { key: 'dxy', name: '달러인덱스', type: 'quote',
-        symbol: 'DX-Y.NYB', unit: '', label: '달러인덱스 (DX-Y.NYB)', digits: 2 },
+        symbol: 'DX-Y.NYB', unit: '', label: '달러인덱스 (DX-Y.NYB)', digits: 2,
+        externalUrl: 'https://kr.tradingview.com/symbols/TVC-DXY/' },
       { key: 'usdkrw', name: '원/달러 환율', type: 'fx-krw',
-        symbol: 'KRW=X', unit: '₩', label: 'USD/KRW (KRW=X)', digits: 2 },
+        symbol: 'KRW=X', unit: '₩', label: 'USD/KRW (KRW=X)', digits: 2,
+        externalUrl: 'https://kr.tradingview.com/symbols/FX_IDC-USDKRW/' },
       { key: 'usdjpy', name: '엔/달러 환율', type: 'quote',
-        symbol: 'JPY=X', unit: '¥', label: 'USD/JPY (JPY=X)', digits: 2 },
+        symbol: 'JPY=X', unit: '¥', label: 'USD/JPY (JPY=X)', digits: 2,
+        externalUrl: 'https://kr.tradingview.com/symbols/FX-USDJPY/' },
       { key: 'krwjpy', name: '원/엔 환율', type: 'quote', scale: 100,
-        symbol: 'JPYKRW=X', unit: '₩', label: '100엔당 원화 (JPYKRW=X×100)', digits: 2 },
+        symbol: 'JPYKRW=X', unit: '₩', label: '100엔당 원화 (JPYKRW=X×100)', digits: 2,
+        externalUrl: 'https://kr.tradingview.com/symbols/FX_IDC-JPYKRW/' },
     ],
   },
   {
@@ -51,13 +56,16 @@ const SECTIONS = [
     items: [
       { key: 'us500', name: 'US 500', type: 'index', unit: '', digits: 2,
         spot: { symbol: '^GSPC', label: 'S&P 500 (^GSPC)' },
-        fut: { symbol: 'ES=F', label: 'S&P 500 선물 (ES=F)' } },
+        fut: { symbol: 'ES=F', label: 'S&P 500 선물 (ES=F)' },
+        externalUrl: 'https://kr.tradingview.com/symbols/TVC-SPX/' },
       { key: 'ustech100', name: 'US Tech 100', type: 'index', unit: '', digits: 2,
         spot: { symbol: '^NDX', label: '나스닥 100 (^NDX)' },
-        fut: { symbol: 'NQ=F', label: '나스닥 100 선물 (NQ=F)' } },
+        fut: { symbol: 'NQ=F', label: '나스닥 100 선물 (NQ=F)' },
+        externalUrl: 'https://kr.tradingview.com/symbols/TVC-NDX/' },
       { key: 'kospi', name: '코스피', type: 'index', unit: '', digits: 2,
         spot: { symbol: '^KS11', label: '코스피 (^KS11)' },
-        fut: { symbol: '^KS11', label: '코스피 (^KS11)' } },
+        fut: { symbol: '^KS11', label: '코스피 (^KS11)' },
+        externalUrl: 'https://kr.tradingview.com/symbols/KRX-KOSPI/' },
     ],
   },
   {
@@ -67,15 +75,20 @@ const SECTIONS = [
     newsCategory: 'commodities',
     items: [
       { key: 'gold', name: '금', type: 'quote',
-        symbol: 'GC=F', unit: '$', label: '금 선물 (GC=F, USD/oz)', digits: 2 },
+        symbol: 'GC=F', unit: '$', label: '금 선물 (GC=F, USD/oz)', digits: 2,
+        externalUrl: 'https://kr.tradingview.com/symbols/TVC-GOLD/' },
       { key: 'silver', name: '은', type: 'quote',
-        symbol: 'SI=F', unit: '$', label: '은 선물 (SI=F, USD/oz)', digits: 3 },
+        symbol: 'SI=F', unit: '$', label: '은 선물 (SI=F, USD/oz)', digits: 3,
+        externalUrl: 'https://kr.tradingview.com/symbols/TVC-SILVER/' },
       { key: 'wti', name: '원유 (WTI)', type: 'quote',
-        symbol: 'CL=F', unit: '$', label: 'WTI 원유 선물 (CL=F, USD/배럴)', digits: 2 },
+        symbol: 'CL=F', unit: '$', label: 'WTI 원유 선물 (CL=F, USD/배럴)', digits: 2,
+        externalUrl: 'https://kr.tradingview.com/symbols/TVC-USOIL/' },
       { key: 'btc', name: '비트코인', type: 'quote',
-        symbol: 'BTC-USD', unit: '$', label: '비트코인 (BTC-USD)', digits: 2 },
+        symbol: 'BTC-USD', unit: '$', label: '비트코인 (BTC-USD)', digits: 2,
+        externalUrl: 'https://kr.tradingview.com/symbols/BITSTAMP-BTCUSD/' },
       { key: 'eth', name: '이더리움', type: 'quote',
-        symbol: 'ETH-USD', unit: '$', label: '이더리움 (ETH-USD)', digits: 2 },
+        symbol: 'ETH-USD', unit: '$', label: '이더리움 (ETH-USD)', digits: 2,
+        externalUrl: 'https://kr.tradingview.com/symbols/BITSTAMP-ETHUSD/' },
     ],
   },
   {
@@ -266,14 +279,14 @@ function syncViewControls() {
   applyViewMode();
 }
 
-// state.view('cards'|'news')에 따라 각 섹션의 카드 그리드 / 관련 뉴스 블록을 전환한다.
+// state.view('cards'|'news')에 따라 각 섹션의 카드 그리드(+채권 탭의 수익률 곡선 행) / 관련 뉴스 블록을 전환한다.
 function applyViewMode() {
   document.querySelectorAll('.market-section').forEach((sec) => {
-    const grid = sec.querySelector(':scope > .grid');
+    const cardContainers = sec.querySelectorAll(':scope > .grid, :scope > .bond-yield-row');
     const newsBlock = sec.querySelector(':scope > .news-block');
-    if (!grid && !newsBlock) return; // 공포탐욕지수/이지인베스팅 같은 전용 레이아웃은 대상 아님
+    if (!cardContainers.length && !newsBlock) return; // 공포탐욕지수/이지인베스팅 같은 전용 레이아웃은 대상 아님
     const showNews = state.view === 'news';
-    if (grid) grid.hidden = showNews;
+    cardContainers.forEach((c) => { c.hidden = showNews; });
     if (newsBlock) newsBlock.hidden = !showNews;
   });
 }
@@ -320,9 +333,20 @@ function buildSections() {
     grid.className = 'grid';
     sec.appendChild(grid);
 
+    // 채권 탭: 2년물 카드는 메인 그리드가 아니라 수익률 곡선 그래프와 나란히 놓는다.
+    const sideKey = section.bondYieldCurve ? 'us2y' : null;
     for (const item of section.items) {
+      if (item.key === sideKey) continue;
       if (item.type === 'premium') buildPremiumCard(grid, item);
       else buildCandleCard(grid, item);
+    }
+    if (sideKey) {
+      const row = document.createElement('div');
+      row.className = 'bond-yield-row';
+      sec.appendChild(row);
+      const sideItem = section.items.find((it) => it.key === sideKey);
+      if (sideItem) buildCandleCard(row, sideItem);
+      buildYieldCurvePanel(row);
     }
 
     // 카드들 아래에 이 섹션 주제의 "관련 뉴스" 블록을 붙인다.
@@ -332,10 +356,11 @@ function buildSections() {
   }
 }
 
-// 캔들 카드 (국채/지수/원자재). index 는 출처 배지를 함께 표시.
+// 국채/환율/지수/원자재 카드. 미니 차트 대신 가격·등락을 크게 보여주고
+// 클릭하면 트레이딩뷰(또는 지정된 externalUrl)로 새 탭 연결.
 function buildCandleCard(grid, item) {
   const el = document.createElement('section');
-  el.className = 'card';
+  el.className = 'card card-nochart';
   el.innerHTML = `
     <div class="card-head">
       <div>
@@ -345,26 +370,23 @@ function buildCandleCard(grid, item) {
       <div class="badges">
         <span class="auto-badge" data-ref="autobadge" hidden></span>
         <span class="source-badge" data-ref="source" hidden></span>
-        <span class="freshness" data-ref="fresh"><span class="dot"></span><span data-ref="freshtext">연결 중…</span></span>
       </div>
     </div>
-    <div class="price-row">
-      <div class="price" data-ref="price">—</div>
-      <div class="change" data-ref="change"></div>
+    <div class="price-row-lg">
+      <div class="price price-lg" data-ref="price">—</div>
+      <div class="change change-lg" data-ref="change"></div>
     </div>
-    <div class="chart" data-ref="chart"></div>
-    <div class="card-hint">${item.externalUrl ? '클릭하면 관련 페이지에서 자세히 보기 ↗' : '클릭하면 Yahoo Finance에서 자세히 보기 ↗'}</div>
-    <div class="card-foot">
-      <span data-ref="range"></span>
-      <span data-ref="updated"></span>
+    <div class="card-status-row">
+      <span class="freshness" data-ref="fresh"><span class="dot"></span><span data-ref="freshtext">연결 중…</span></span>
+      <span class="updated-text" data-ref="updated"></span>
     </div>
+    <div class="card-hint">${item.externalUrl ? '클릭하면 트레이딩뷰에서 자세히 보기 ↗' : '클릭하면 Yahoo Finance에서 자세히 보기 ↗'}</div>
   `;
   grid.appendChild(el);
   const refs = collectRefs(el);
 
-  // 클릭 → item.externalUrl 이 있으면 그 페이지로, 없으면 현재 표시 중인 심볼의 Yahoo Finance 페이지로 (차트 조작 시 제외)
-  el.addEventListener('click', (e) => {
-    if (e.target.closest('.chart')) return;
+  // 클릭 → item.externalUrl(트레이딩뷰 등)이 있으면 그 페이지로, 없으면 현재 표시 중인 심볼의 Yahoo Finance 페이지로
+  el.addEventListener('click', () => {
     if (item.externalUrl) {
       window.open(item.externalUrl, '_blank', 'noopener');
       return;
@@ -373,20 +395,8 @@ function buildCandleCard(grid, item) {
     window.open(`https://finance.yahoo.com/quote/${encodeURIComponent(sym)}`, '_blank', 'noopener');
   });
 
-  const chart = makeChart(refs.chart);
-  const series = chart.addCandlestickSeries({
-    upColor: '#2ebd85',
-    downColor: '#f6465c',
-    borderUpColor: '#2ebd85',
-    borderDownColor: '#f6465c',
-    wickUpColor: '#2ebd85',
-    wickDownColor: '#f6465c',
-    priceLineVisible: false,
-    lastValueVisible: false,
-  });
-
   cards[item.key] = {
-    item, el, chart, series, refs,
+    item, el, refs,
     displaySymbol: legConf(item, 'spot').symbol, // 클릭 링크용 (갱신 시 갱신됨)
   };
 }
@@ -537,11 +547,12 @@ function buildFearGreedPanel(sec) {
         <div class="fg-featured-sub" data-ref="fgVixSub"></div>
         <div class="card-hint">클릭하면 Yahoo Finance에서 자세히 보기 ↗</div>
       </div>
-      <div class="card fg-featured fg-featured-static" data-ref="fgPutCallCard">
+      <div class="card fg-featured" data-ref="fgPutCallCard">
         <div class="card-name">풋/콜 옵션 비율</div>
         <div class="fg-featured-value" data-ref="fgPutCallValue">--</div>
         <div class="fg-featured-badge" data-ref="fgPutCallBadge">--</div>
         <div class="fg-featured-sub" data-ref="fgPutCallSub"></div>
+        <div class="card-hint">클릭하면 매크로마이크로에서 자세히 보기 ↗</div>
       </div>
     </div>
 
@@ -551,10 +562,13 @@ function buildFearGreedPanel(sec) {
 
   fg.refs = collectRefs(wrap);
 
-  // VIX 카드 → 야후 파이낸스 ^VIX 페이지로 연결.
-  // 풋/콜 카드는 마땅히 연결할 만한 페이지가 없어 클릭 연결을 두지 않는다(정보 표시 전용).
+  // 메인 게이지 카드는 클릭 연결 없음(정보 표시 전용).
+  // VIX → 야후 파이낸스 ^VIX 페이지, 풋/콜 → 매크로마이크로 풋/콜 비율 차트 페이지로 연결.
   fg.refs.fgVixCard.addEventListener('click', () => {
     window.open('https://finance.yahoo.com/quote/%5EVIX', '_blank', 'noopener');
+  });
+  fg.refs.fgPutCallCard.addEventListener('click', () => {
+    window.open('https://en.macromicro.me/charts/449/us-cboe-options-put-call-ratio', '_blank', 'noopener');
   });
 
   fg.chart = makeChart(fg.refs.fgChart);
@@ -704,6 +718,232 @@ function buildLinkoutPanel(sec, section) {
   });
 }
 
+// ---- 채권 탭: 미국 국채 수익률 곡선 (2년물 카드 옆) -------------------------
+// refs: 카드 안에 작게 들어간 뷰. modalRefs: 클릭 시 뜨는 확대 모달.
+const yieldCurve = { refs: {}, modalRefs: {}, modalOverlay: null };
+
+function buildYieldCurvePanel(container) {
+  const panel = document.createElement('section');
+  panel.className = 'yield-curve-panel';
+  panel.innerHTML = `
+    <div class="card-head">
+      <div>
+        <div class="card-name">미국 국채 수익률 곡선</div>
+        <div class="card-sub" data-ref="ycDate">불러오는 중…</div>
+      </div>
+    </div>
+    <div class="yield-curve-chart-wrap" data-ref="ycChartWrap">
+      <svg class="yield-curve-svg" viewBox="0 0 640 260" preserveAspectRatio="none" data-ref="ycSvg"></svg>
+      <div class="yc-tooltip" data-ref="ycTooltip" hidden></div>
+    </div>
+    <div class="yield-curve-legend" data-ref="ycLegend"></div>
+    <div class="yield-curve-spread" data-ref="ycSpread"></div>
+    <div class="yield-curve-source">출처: 미국 재무부(Treasury.gov) 공식 일일 수익률 곡선</div>
+    <div class="card-hint">클릭하면 크게 보기 🔍</div>
+  `;
+  container.appendChild(panel);
+  yieldCurve.refs = collectRefs(panel);
+
+  // 그래프 배경 클릭 → 확대 모달. 점/선 위 클릭은 툴팁용이라 모달을 열지 않는다.
+  yieldCurve.refs.ycChartWrap.addEventListener('click', (e) => {
+    if (e.target.closest('.yc-point, .yc-line')) return;
+    openYieldCurveModal();
+  });
+  attachYieldCurveTooltip(yieldCurve.refs.ycSvg, yieldCurve.refs.ycTooltip, yieldCurve.refs.ycChartWrap);
+
+  buildYieldCurveModal();
+  updateYieldCurve();
+}
+
+function buildYieldCurveModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'yc-modal-overlay';
+  overlay.hidden = true;
+  overlay.innerHTML = `
+    <div class="yc-modal">
+      <button type="button" class="yc-modal-close" data-ref="ycModalClose" aria-label="닫기">✕</button>
+      <div class="card-name">미국 국채 수익률 곡선</div>
+      <div class="card-sub" data-ref="ycModalDate"></div>
+      <div class="yield-curve-chart-wrap yc-modal-chart-wrap" data-ref="ycModalChartWrap">
+        <svg class="yield-curve-svg yc-modal-svg" viewBox="0 0 640 260" preserveAspectRatio="none" data-ref="ycModalSvg"></svg>
+        <div class="yc-tooltip yc-modal-tooltip" data-ref="ycModalTooltip" hidden></div>
+      </div>
+      <div class="yield-curve-legend yc-modal-legend" data-ref="ycModalLegend"></div>
+      <div class="yield-curve-spread yc-modal-spread" data-ref="ycModalSpread"></div>
+      <div class="yield-curve-source">출처: 미국 재무부(Treasury.gov) 공식 일일 수익률 곡선</div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  yieldCurve.modalRefs = collectRefs(overlay);
+  yieldCurve.modalOverlay = overlay;
+
+  // 모달 바깥(오버레이 자체) 클릭 시 닫기 — 안쪽 .yc-modal 클릭은 버블링으로 여기까지 안 옴.
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeYieldCurveModal();
+  });
+  yieldCurve.modalRefs.ycModalClose.addEventListener('click', closeYieldCurveModal);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !overlay.hidden) closeYieldCurveModal();
+  });
+  attachYieldCurveTooltip(
+    yieldCurve.modalRefs.ycModalSvg,
+    yieldCurve.modalRefs.ycModalTooltip,
+    yieldCurve.modalRefs.ycModalChartWrap
+  );
+}
+
+function openYieldCurveModal() {
+  if (!yieldCurve.modalOverlay) return;
+  yieldCurve.modalOverlay.hidden = false;
+}
+function closeYieldCurveModal() {
+  if (yieldCurve.modalOverlay) yieldCurve.modalOverlay.hidden = true;
+}
+
+// 그래프 위 점/선에 마우스를 올리거나(호버) 탭했을 때(모바일) 값을 보여주는 커스텀 툴팁.
+// 네이티브 SVG <title> 은 모바일 탭에서 안정적으로 뜨지 않아 별도 div 로 직접 구현한다.
+function attachYieldCurveTooltip(svgEl, tooltipEl, wrapEl) {
+  const show = (target, evt) => {
+    const tip = target.getAttribute('data-tip');
+    if (!tip) return;
+    tooltipEl.textContent = tip;
+    tooltipEl.hidden = false;
+    const wrapRect = wrapEl.getBoundingClientRect();
+    const x = evt.clientX - wrapRect.left;
+    const y = evt.clientY - wrapRect.top;
+    tooltipEl.style.left = `${Math.min(Math.max(x + 12, 4), Math.max(wrapRect.width - 150, 4))}px`;
+    tooltipEl.style.top = `${Math.max(y - 30, 4)}px`;
+  };
+  const hide = () => { tooltipEl.hidden = true; };
+
+  svgEl.addEventListener('pointermove', (e) => {
+    const target = e.target.closest('.yc-point, .yc-line');
+    if (target) show(target, e); else hide();
+  });
+  svgEl.addEventListener('pointerleave', hide);
+  svgEl.addEventListener('click', (e) => {
+    const target = e.target.closest('.yc-point, .yc-line');
+    if (target) show(target, e);
+  });
+}
+
+function buildYieldCurveSvg(maturities, curves) {
+  const width = 640;
+  const height = 260;
+  const padL = 38;
+  const padR = 10;
+  const padT = 12;
+  const padB = 26;
+  const plotW = width - padL - padR;
+  const plotH = height - padT - padB;
+
+  const allValues = curves.flatMap((c) => c.points.map((p) => p.value)).filter((v) => v != null);
+  if (allValues.length === 0) return '';
+  const rawMin = Math.min(...allValues);
+  const rawMax = Math.max(...allValues);
+  const minV = Math.floor((rawMin - 0.25) * 2) / 2;
+  const maxV = Math.ceil((rawMax + 0.25) * 2) / 2;
+
+  const xFor = (i) => padL + (i / (maturities.length - 1)) * plotW;
+  const yFor = (v) => padT + plotH - ((v - minV) / (maxV - minV)) * plotH;
+
+  let svg = '';
+
+  const tickCount = 4;
+  for (let i = 0; i <= tickCount; i++) {
+    const v = minV + ((maxV - minV) * i) / tickCount;
+    const y = yFor(v);
+    svg += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${width - padR}" y2="${y.toFixed(1)}" class="yc-gridline" />`;
+    svg += `<text x="${padL - 6}" y="${(y + 3).toFixed(1)}" class="yc-axis-label" text-anchor="end">${v.toFixed(1)}%</text>`;
+  }
+
+  maturities.forEach((m, i) => {
+    const x = xFor(i);
+    svg += `<text x="${x.toFixed(1)}" y="${height - padB + 16}" class="yc-axis-label" text-anchor="middle">${m.label}</text>`;
+  });
+
+  [...curves].reverse().forEach((c) => {
+    const linePts = [];
+    c.points.forEach((p, i) => {
+      if (p.value == null) return;
+      linePts.push(`${xFor(i).toFixed(1)},${yFor(p.value).toFixed(1)}`);
+    });
+    if (linePts.length >= 2) {
+      svg += `<polyline points="${linePts.join(' ')}" class="yc-line yc-line-${c.key}" fill="none" data-tip="${escapeXml(c.shortLabel)}"><title>${escapeXml(c.shortLabel)}</title></polyline>`;
+    }
+    c.points.forEach((p, i) => {
+      if (p.value == null) return;
+      const x = xFor(i);
+      const y = yFor(p.value);
+      const tip = `${c.shortLabel} · ${p.label}: ${p.value.toFixed(2)}%`;
+      svg += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5" class="yc-point yc-point-${c.key}" data-tip="${escapeXml(tip)}"><title>${escapeXml(tip)}</title></circle>`;
+    });
+  });
+
+  return svg;
+}
+
+function escapeXml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function buildYieldCurveLegendHtml(curves) {
+  return curves
+    .map((c) => `<span class="yc-legend-item"><span class="yc-legend-swatch yc-legend-${c.key}"></span>${c.label}</span>`)
+    .join('');
+}
+
+async function updateYieldCurve() {
+  const refs = yieldCurve.refs;
+  if (!refs.ycSvg) return;
+  try {
+    const res = await fetch('/api/treasury-yield-curve');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+    const curves = [
+      { key: 'latest', shortLabel: '오늘', label: `오늘 (${data.latest.date})`, points: data.latest.curve },
+    ];
+    if (data.oneMonthAgo) {
+      curves.push({ key: 'oneMonthAgo', shortLabel: '1개월 전', label: `1개월 전 (${data.oneMonthAgo.date})`, points: data.oneMonthAgo.curve });
+    }
+    if (data.oneYearAgo) {
+      curves.push({ key: 'oneYearAgo', shortLabel: '1년 전', label: `1년 전 (${data.oneYearAgo.date})`, points: data.oneYearAgo.curve });
+    }
+
+    const svgMarkup = buildYieldCurveSvg(data.maturities, curves);
+    const dateText = `기준일 ${data.latest.date} (전 영업일 종가)`;
+    const legendHtml = buildYieldCurveLegendHtml(curves);
+    let spreadHtml;
+    if (data.spread10y2y != null) {
+      const inverted = data.spread10y2y < 0;
+      const sign = data.spread10y2y >= 0 ? '+' : '';
+      spreadHtml =
+        `10년물-2년물 스프레드: <strong class="${inverted ? 'yc-spread-inverted' : ''}">${sign}${data.spread10y2y.toFixed(2)}%p</strong>` +
+        (inverted ? ' (장단기 금리 역전)' : '');
+    } else {
+      spreadHtml = '스프레드 계산 불가';
+    }
+
+    // 작은 카드 뷰
+    refs.ycSvg.innerHTML = svgMarkup;
+    refs.ycDate.textContent = dateText;
+    refs.ycLegend.innerHTML = legendHtml;
+    refs.ycSpread.innerHTML = spreadHtml;
+
+    // 확대 모달 (열려있지 않아도 동기화해 둔다 — 다음에 열 때 최신 데이터가 바로 보이도록)
+    const mRefs = yieldCurve.modalRefs;
+    if (mRefs.ycModalSvg) {
+      mRefs.ycModalSvg.innerHTML = svgMarkup;
+      mRefs.ycModalDate.textContent = dateText;
+      mRefs.ycModalLegend.innerHTML = legendHtml;
+      mRefs.ycModalSpread.innerHTML = spreadHtml;
+    }
+  } catch (e) {
+    refs.ycDate.textContent = `조회 실패: ${String((e && e.message) || e).slice(0, 60)}`;
+  }
+}
+
 // ---- 각 탭 하단 "관련 뉴스" 블록 --------------------------------------------
 const news = { refs: {} };
 
@@ -798,7 +1038,6 @@ async function fetchLeg(item, leg) {
 async function updateCandle(key) {
   const card = cards[key];
   const item = card.item;
-  const { intraday } = RANGE_INTERVAL[state.range];
 
   try {
     let data, conf, leg, autoSwitched = false;
@@ -881,30 +1120,9 @@ async function updateCandle(key) {
         `(${sign}${fmtNumber(pct, 2)}%)`;
     }
 
-    // --- 캔들 차트 ---
-    if (Array.isArray(data.series) && data.series.length) {
-      const seen = new Set();
-      const points = [];
-      for (const p of data.series) {
-        if (seen.has(p.time)) continue;
-        seen.add(p.time);
-        points.push({
-          time: p.time,
-          open: p.open * scale,
-          high: p.high * scale,
-          low: p.low * scale,
-          close: p.close * scale,
-        });
-      }
-      card.series.setData(points);
-      card.chart.timeScale().applyOptions({ timeVisible: intraday });
-      card.chart.timeScale().fitContent();
-    }
-
     // --- 신선도 ---
     setFresh(card, data.marketTime ? nowSec() - data.marketTime : null);
     card.refs.updated.textContent = `갱신 ${new Date().toLocaleTimeString('ko-KR')}`;
-    card.refs.range.textContent = `기간 ${labelForRange(state.range)}`;
   } catch (err) {
     card.refs.fresh.className = 'freshness error';
     card.refs.freshtext.textContent = '오류';
@@ -925,10 +1143,6 @@ function setFresh(card, age) {
     fresh.className = 'freshness delayed';
     txt.textContent = `지연 · ${agoText(age)}`;
   }
-}
-
-function labelForRange(r) {
-  return { '1d': '1일', '5d': '5일', '1mo': '1개월', '6mo': '6개월', '1y': '1년' }[r] || r;
 }
 
 // ---- 프리미엄 카드 갱신 ----------------------------------------------------
@@ -1093,3 +1307,4 @@ updateFearGreed();
 setInterval(updateFearGreed, FEARGREED_REFRESH_MS);
 updateNews();
 setInterval(updateNews, NEWS_REFRESH_MS);
+setInterval(updateYieldCurve, NEWS_REFRESH_MS); // 하루 1회 갱신되는 데이터라 자주 돌 필요는 없지만 서버가 캐싱하므로 부담 없음

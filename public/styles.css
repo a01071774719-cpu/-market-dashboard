@@ -293,6 +293,40 @@ h1::before {
   cursor: crosshair;
 }
 
+/* 미니 차트 없이 가격/등락을 크게 보여주는 카드 (채권·환율·지수·원자재) */
+.card-nochart {
+  min-height: 168px;
+}
+
+.price-row-lg {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.price-lg {
+  font-size: 40px;
+}
+
+.change-lg {
+  font-size: 17px;
+}
+
+.card-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.updated-text {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
 .card-hint {
   font-size: 11px;
   color: var(--text-dim);
@@ -542,17 +576,6 @@ h1::before {
   opacity: 1;
 }
 
-/* 클릭 연결이 없는 카드(예: 풋/콜 비율)는 클릭 가능해 보이는 스타일을 뺀다 */
-.fg-featured-static {
-  cursor: default;
-}
-
-.fg-featured-static:hover {
-  border-color: var(--border);
-  transform: none;
-  box-shadow: none;
-}
-
 .fg-featured-value {
   font-size: 36px;
   font-weight: 800;
@@ -757,6 +780,227 @@ h1::before {
   color: var(--text-dim);
 }
 
+/* ---------- 채권 탭: 2년물 카드 + 수익률 곡선 그래프 ---------- */
+.bond-yield-row {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) 2fr;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+/* .grid[hidden] 과 동일한 이유로, display:grid 를 명시한 요소는
+   시세/뉴스 토글 시 hidden 속성만으로는 안 숨겨지므로 명시적으로 덮어쓴다. */
+.bond-yield-row[hidden] {
+  display: none;
+}
+
+.yield-curve-panel {
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.yield-curve-chart-wrap {
+  width: 100%;
+  position: relative;
+  cursor: zoom-in;
+}
+
+.yield-curve-svg {
+  width: 100%;
+  height: 220px;
+  display: block;
+}
+
+.yc-tooltip {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  background: #05100b;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+
+.yc-gridline {
+  stroke: rgba(34, 48, 41, 0.6);
+  stroke-width: 1;
+}
+
+.yc-axis-label {
+  fill: var(--text-dim);
+  font-size: 9.5px;
+}
+
+.yc-line {
+  stroke-width: 2;
+}
+
+.yc-line-latest {
+  stroke: var(--accent);
+}
+
+.yc-line-oneMonthAgo {
+  stroke: var(--amber);
+  stroke-dasharray: 5 4;
+}
+
+.yc-line-oneYearAgo {
+  stroke: #8a8fd1;
+  stroke-dasharray: 2 3;
+}
+
+.yc-point,
+.yc-line {
+  cursor: pointer;
+}
+
+.yc-point-latest {
+  fill: var(--accent);
+}
+
+.yc-point-oneMonthAgo {
+  fill: var(--amber);
+}
+
+.yc-point-oneYearAgo {
+  fill: #8a8fd1;
+}
+
+.yield-curve-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.yc-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* 범례 견본을 실제 선 스타일(실선/파선)과 맞춰 어떤 선인지 한눈에 구분되게 한다. */
+.yc-legend-swatch {
+  width: 18px;
+  height: 0;
+  border-top-width: 3px;
+  border-top-style: solid;
+  display: inline-block;
+}
+
+.yc-legend-latest {
+  border-top-color: var(--accent);
+}
+
+.yc-legend-oneMonthAgo {
+  border-top-color: var(--amber);
+  border-top-style: dashed;
+}
+
+.yc-legend-oneYearAgo {
+  border-top-color: #8a8fd1;
+  border-top-style: dashed;
+}
+
+.yield-curve-spread {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.yc-spread-inverted {
+  color: var(--down);
+}
+
+.yield-curve-source {
+  font-size: 11px;
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+
+/* ---------- 채권 탭: 수익률 곡선 확대 모달 ---------- */
+.yc-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 8, 6, 0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+}
+
+.yc-modal-overlay[hidden] {
+  display: none;
+}
+
+.yc-modal {
+  position: relative;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px;
+  width: min(1100px, 96vw);
+  max-height: 92vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+
+.yc-modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.yc-modal-close:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.yc-modal-chart-wrap {
+  cursor: default;
+}
+
+.yc-modal-svg {
+  width: 100%;
+  height: min(64vh, 560px);
+}
+
+.yc-modal-legend {
+  font-size: 14px;
+  gap: 18px;
+}
+
+.yc-modal-legend .yc-legend-swatch {
+  width: 24px;
+  border-top-width: 4px;
+}
+
+.yc-modal-spread {
+  font-size: 16px;
+}
+
 /* ---------- 반응형 ---------- */
 @media (max-width: 640px) {
   .topbar { padding: 14px 16px; }
@@ -772,4 +1016,9 @@ h1::before {
   .fg-top { grid-template-columns: 1fr; }
   .fg-featured-grid { grid-template-columns: 1fr; }
   .fg-small-grid { grid-template-columns: repeat(2, 1fr); }
+  .bond-yield-row { grid-template-columns: 1fr; margin-top: 14px; }
+  .yc-modal-overlay { padding: 10px; }
+  .yc-modal { padding: 18px; padding-top: 44px; }
+  .yc-modal-svg { height: 50vh; }
+  .yc-modal-legend { font-size: 12px; gap: 10px; }
 }

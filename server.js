@@ -102,44 +102,94 @@ function parseChart(json) {
 
 // 야후에는 2년물 만기수익률을 정확히 주는 상시 티커가 없다(^TNX/^TYX/^FVX 는 각 10/30/5년물 전용).
 // 2YY=F(CBOT 2년물 수익률 선물)는 거래량이 거의 없어 며칠씩 stale 한 값이 나오는 문제가 확인되어,
-// 미국 재무부 공식 일일 수익률 곡선(전일 종가 기준, 정확도 보장)을 대체 소스로 사용한다.
-const TREASURY_2Y_CACHE_TTL_MS = 30 * 60 * 1000;
-let treasury2yCache = null; // { at, data }
+// 미국 재무부 공식 일일 수익률 곡선(전일 종가 기준, 정확도 보장)을 2년물 카드와 수익률 곡선 그래프의
+// 공통 소스로 사용한다.
+const TREASURY_MATURITIES = [
+  { key: '1m', label: '1개월', csvHeader: '1 Mo' },
+  { key: '1.5m', label: '1.5개월', csvHeader: '1.5 Month' },
+  { key: '2m', label: '2개월', csvHeader: '2 Mo' },
+  { key: '3m', label: '3개월', csvHeader: '3 Mo' },
+  { key: '4m', label: '4개월', csvHeader: '4 Mo' },
+  { key: '6m', label: '6개월', csvHeader: '6 Mo' },
+  { key: '1y', label: '1년', csvHeader: '1 Yr' },
+  { key: '2y', label: '2년', csvHeader: '2 Yr' },
+  { key: '3y', label: '3년', csvHeader: '3 Yr' },
+  { key: '5y', label: '5년', csvHeader: '5 Yr' },
+  { key: '7y', label: '7년', csvHeader: '7 Yr' },
+  { key: '10y', label: '10년', csvHeader: '10 Yr' },
+  { key: '20y', label: '20년', csvHeader: '20 Yr' },
+  { key: '30y', label: '30년', csvHeader: '30 Yr' },
+];
 
-async function getUsTreasury2Y() {
-  if (treasury2yCache && Date.now() - treasury2yCache.at < TREASURY_2Y_CACHE_TTL_MS) {
-    return treasury2yCache.data;
+function parseTreasuryCsv(csv) {
+  const lines = csv.trim().split('\n');
+  const header = lines[0].split(',').map((h) => h.replace(/"/g, '').trim());
+  const colIndex = TREASURY_MATURITIES.map((m) => header.indexOf(m.csvHeader));
+
+  const rows = [];
+  for (const line of lines.slice(1)) {
+    const cells = line.split(',').map((c) => c.replace(/"/g, '').trim());
+    const dateParts = (cells[0] || '').split('/');
+    if (dateParts.length !== 3) continue;
+    const [mm, dd, yyyy] = dateParts;
+    const date = Date.UTC(Number(yyyy), Number(mm) - 1, Number(dd));
+
+    const values = {};
+    TREASURY_MATURITIES.forEach((m, i) => {
+      const idx = colIndex[i];
+      const raw = idx >= 0 ? cells[idx] : '';
+      values[m.key] = raw ? parseFloat(raw) : null;
+    });
+    rows.push({ date, dateStr: cells[0], values });
   }
-  const year = new Date().getFullYear();
+  return rows; // CSV 순서 그대로: 최신 날짜가 맨 앞
+}
+
+async function fetchTreasuryYearCsv(year) {
   const url =
     `https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${year}/all` +
     `?type=daily_treasury_yield_curve&field_tdr_date_value=${year}&page&_format=csv`;
   const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-  if (!res.ok) throw new Error(`Treasury HTTP ${res.status}`);
-  const csv = await res.text();
-  const lines = csv.trim().split('\n');
-  const header = lines[0].split(',').map((h) => h.replace(/"/g, '').trim());
-  const col2y = header.indexOf('2 Yr');
-  if (col2y === -1) throw new Error('CSV에서 "2 Yr" 컬럼을 찾을 수 없음');
+  if (!res.ok) throw new Error(`Treasury HTTP ${res.status} (${year})`);
+  return parseTreasuryCsv(await res.text());
+}
 
-  const rows = lines
-    .slice(1)
-    .map((line) => line.split(',').map((c) => c.replace(/"/g, '').trim()))
-    .filter((cells) => cells.length > col2y && cells[col2y]);
-  if (rows.length === 0) throw new Error('재무부 CSV에 데이터 행이 없음');
+// 하루 1회만 갱신되면 충분하므로 24시간 캐싱한다.
+const YIELD_CURVE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+let yieldCurveCache = null; // { at, rows }
 
-  const latest = rows[0]; // CSV는 최신 날짜가 맨 위
+async function getYieldCurveRows() {
+  if (yieldCurveCache && Date.now() - yieldCurveCache.at < YIELD_CURVE_CACHE_TTL_MS) {
+    return yieldCurveCache.rows;
+  }
+  const nowYear = new Date().getFullYear();
+  const [curYearRows, prevYearRows] = await Promise.all([
+    fetchTreasuryYearCsv(nowYear),
+    fetchTreasuryYearCsv(nowYear - 1).catch(() => []),
+  ]);
+  const rows = [...curYearRows, ...prevYearRows].sort((a, b) => b.date - a.date);
+  if (rows.length === 0) throw new Error('재무부 데이터가 비어 있음');
+  yieldCurveCache = { at: Date.now(), rows };
+  return rows;
+}
+
+// rows 는 최신순(내림차순) 정렬되어 있다고 가정 — target 이하인 첫 행을 반환.
+function findRowOnOrBefore(rows, targetDate) {
+  for (const r of rows) {
+    if (r.date <= targetDate) return r;
+  }
+  return rows[rows.length - 1] || null;
+}
+
+async function getUsTreasury2Y() {
+  const rows = await getYieldCurveRows();
+  const latest = rows[0];
   const prev = rows[1] || latest;
-  const [mm, dd, yyyy] = latest[0].split('/');
-  const marketTime = Math.floor(Date.UTC(Number(yyyy), Number(mm) - 1, Number(dd)) / 1000);
-
-  const data = {
-    price: parseFloat(latest[col2y]),
-    previousClose: parseFloat(prev[col2y]),
-    marketTime,
+  return {
+    price: latest.values['2y'],
+    previousClose: prev.values['2y'],
+    marketTime: Math.floor(latest.date / 1000),
   };
-  treasury2yCache = { at: Date.now(), data };
-  return data;
 }
 
 // GET /api/chart?symbol=^TNX&range=1d&interval=5m
@@ -181,6 +231,37 @@ app.get('/api/chart', async (req, res) => {
     res.json(parseChart(json));
   } catch (e) {
     res.status(502).json({ error: String((e && e.message) || e), symbol });
+  }
+});
+
+// GET /api/treasury-yield-curve — 미국 재무부 공식 일일 수익률 곡선(오늘/1개월 전/1년 전 비교)
+app.get('/api/treasury-yield-curve', async (_req, res) => {
+  try {
+    const rows = await getYieldCurveRows();
+    const latest = rows[0];
+    const oneMonthAgo = findRowOnOrBefore(rows, latest.date - 30 * 24 * 3600 * 1000);
+    const oneYearAgo = findRowOnOrBefore(rows, latest.date - 365 * 24 * 3600 * 1000);
+
+    const toCurve = (row) =>
+      row && TREASURY_MATURITIES.map((m) => ({ key: m.key, label: m.label, value: row.values[m.key] }));
+
+    const spread10y2y =
+      latest.values['10y'] != null && latest.values['2y'] != null
+        ? Math.round((latest.values['10y'] - latest.values['2y']) * 100) / 100
+        : null;
+
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      maturities: TREASURY_MATURITIES.map((m) => ({ key: m.key, label: m.label })),
+      latest: { date: latest.dateStr, curve: toCurve(latest) },
+      oneMonthAgo: oneMonthAgo ? { date: oneMonthAgo.dateStr, curve: toCurve(oneMonthAgo) } : null,
+      oneYearAgo: oneYearAgo ? { date: oneYearAgo.dateStr, curve: toCurve(oneYearAgo) } : null,
+      spread10y2y,
+      source: 'us-treasury',
+      fetchedAt: Math.floor(Date.now() / 1000),
+    });
+  } catch (e) {
+    res.status(502).json({ error: String((e && e.message) || e) });
   }
 });
 

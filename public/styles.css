@@ -521,6 +521,17 @@ h1::before {
   opacity: 1;
 }
 
+/* 클릭 연결이 없는 카드(예: 풋/콜 비율)는 클릭 가능해 보이는 스타일을 뺀다 */
+.fg-featured-static {
+  cursor: default;
+}
+
+.fg-featured-static:hover {
+  border-color: var(--border);
+  transform: none;
+  box-shadow: none;
+}
+
 .fg-featured-value {
   font-size: 36px;
   font-weight: 800;

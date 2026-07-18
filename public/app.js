@@ -486,12 +486,11 @@ function buildFearGreedPanel(sec) {
         <div class="fg-featured-sub" data-ref="fgVixSub"></div>
         <div class="card-hint">클릭하면 Yahoo Finance에서 자세히 보기 ↗</div>
       </div>
-      <div class="card fg-featured" data-ref="fgPutCallCard">
+      <div class="card fg-featured fg-featured-static" data-ref="fgPutCallCard">
         <div class="card-name">풋/콜 옵션 비율</div>
         <div class="fg-featured-value" data-ref="fgPutCallValue">--</div>
         <div class="fg-featured-badge" data-ref="fgPutCallBadge">--</div>
         <div class="fg-featured-sub" data-ref="fgPutCallSub"></div>
-        <div class="card-hint">클릭하면 CNN Fear &amp; Greed 페이지 보기 ↗</div>
       </div>
     </div>
 
@@ -501,13 +500,10 @@ function buildFearGreedPanel(sec) {
 
   fg.refs = collectRefs(wrap);
 
-  // VIX 카드 → 야후 파이낸스 ^VIX 페이지, 풋/콜 카드 → CNN Fear & Greed 페이지
-  // (풋/콜 비율은 야후에 대응 심볼이 없어 데이터 출처인 CNN 페이지로 연결)
+  // VIX 카드 → 야후 파이낸스 ^VIX 페이지로 연결.
+  // 풋/콜 카드는 마땅히 연결할 만한 페이지가 없어 클릭 연결을 두지 않는다(정보 표시 전용).
   fg.refs.fgVixCard.addEventListener('click', () => {
     window.open('https://finance.yahoo.com/quote/%5EVIX', '_blank', 'noopener');
-  });
-  fg.refs.fgPutCallCard.addEventListener('click', () => {
-    window.open('https://edition.cnn.com/markets/fear-and-greed', '_blank', 'noopener');
   });
 
   fg.chart = makeChart(fg.refs.fgChart);

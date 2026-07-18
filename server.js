@@ -723,15 +723,6 @@ function recencyScore(timestamp) {
   return 10 * Math.pow(0.5, ageHours / 12); // 12시간마다 절반으로 감쇠
 }
 
-// 최종 정렬용: "며칠 전"인지(24시간 단위 버킷). 0=오늘(24시간 이내),
-// 1=1~2일 전, 2=2~3일 전 ... 타임스탬프가 없으면 가장 오래된 것으로 취급.
-const NEWS_DAY_BUCKET_HOURS = 24;
-function dayBucket(timestamp) {
-  if (!timestamp) return Infinity;
-  const ageHours = Math.max(0, Date.now() / 1000 / 3600 - timestamp / 3600);
-  return Math.floor(ageHours / NEWS_DAY_BUCKET_HOURS);
-}
-
 // 교차 출처 중복(같은 이슈를 여러 매체가 다룸)에 가장 큰 가중치를 둔다.
 const DUPLICATE_SOURCE_WEIGHT = 6;
 const NEWS_SCORE_THRESHOLD = 14; // 이 값 미만은 "사소한 단신"으로 간주해 제외
@@ -784,12 +775,11 @@ app.get('/api/news', async (req, res) => {
         score: Math.round(score * 10) / 10,
       };
     });
-    scored.sort((a, b) => {
-      const bucketDiff = dayBucket(a.timestamp) - dayBucket(b.timestamp);
-      if (bucketDiff !== 0) return bucketDiff; // 최신 날짜 그룹 먼저
-      return b.score - a.score; // 같은 날짜 그룹 내에서는 중요도 높은 순
-    });
-    const items = scored.filter((s) => s.score >= NEWS_SCORE_THRESHOLD);
+    // 1단계: 중요도 점수로 "볼 만한 뉴스"만 필터링 (임계값 미만은 제외)
+    // 2단계: 필터링된 뉴스를 발행 시각 기준 내림차순(최신 → 과거)으로 정렬
+    const items = scored
+      .filter((s) => s.score >= NEWS_SCORE_THRESHOLD)
+      .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
     const payload = {
       category,

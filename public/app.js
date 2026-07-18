@@ -16,11 +16,14 @@ const SECTIONS = [
     newsCategory: 'bonds', // 카드 아래 "관련 뉴스" 섹션에 쓸 /api/news category
     items: [
       { key: 'us30y', name: '미국 30년물 국채 금리', type: 'quote',
-        symbol: '^TYX', unit: '%', label: '30년물 국채 수익률 (^TYX)', digits: 3 },
+        symbol: '^TYX', unit: '%', label: '30년물 국채 수익률 (^TYX)', digits: 3,
+        externalUrl: 'https://kr.tradingview.com/symbols/TVC-US30Y/' },
       { key: 'us10y', name: '미국 10년물 국채 금리', type: 'quote',
-        symbol: '^TNX', unit: '%', label: '10년물 국채 수익률 (^TNX)', digits: 3 },
+        symbol: '^TNX', unit: '%', label: '10년물 국채 수익률 (^TNX)', digits: 3,
+        externalUrl: 'https://kr.tradingview.com/symbols/TVC-US10Y/' },
       { key: 'us2y', name: '미국 2년물 국채 금리', type: 'quote',
-        symbol: '2YY=F', unit: '%', label: '2년물 금리 (2YY=F · 수익률 선물)', digits: 3 },
+        symbol: 'US2Y=TREASURY', unit: '%', label: '2년물 금리 (미국 재무부 공식 일일 수익률)', digits: 2,
+        externalUrl: 'https://kr.tradingview.com/symbols/TVC-US02Y/' },
     ],
   },
   {
@@ -350,7 +353,7 @@ function buildCandleCard(grid, item) {
       <div class="change" data-ref="change"></div>
     </div>
     <div class="chart" data-ref="chart"></div>
-    <div class="card-hint">클릭하면 Yahoo Finance에서 자세히 보기 ↗</div>
+    <div class="card-hint">${item.externalUrl ? '클릭하면 관련 페이지에서 자세히 보기 ↗' : '클릭하면 Yahoo Finance에서 자세히 보기 ↗'}</div>
     <div class="card-foot">
       <span data-ref="range"></span>
       <span data-ref="updated"></span>
@@ -359,9 +362,13 @@ function buildCandleCard(grid, item) {
   grid.appendChild(el);
   const refs = collectRefs(el);
 
-  // 클릭 → 현재 표시 중인 심볼의 Yahoo Finance 페이지 (차트 조작 시 제외)
+  // 클릭 → item.externalUrl 이 있으면 그 페이지로, 없으면 현재 표시 중인 심볼의 Yahoo Finance 페이지로 (차트 조작 시 제외)
   el.addEventListener('click', (e) => {
     if (e.target.closest('.chart')) return;
+    if (item.externalUrl) {
+      window.open(item.externalUrl, '_blank', 'noopener');
+      return;
+    }
     const sym = cards[item.key].displaySymbol;
     window.open(`https://finance.yahoo.com/quote/${encodeURIComponent(sym)}`, '_blank', 'noopener');
   });

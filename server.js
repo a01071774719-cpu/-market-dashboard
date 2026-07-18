@@ -100,6 +100,48 @@ function parseChart(json) {
   };
 }
 
+// 야후에는 2년물 만기수익률을 정확히 주는 상시 티커가 없다(^TNX/^TYX/^FVX 는 각 10/30/5년물 전용).
+// 2YY=F(CBOT 2년물 수익률 선물)는 거래량이 거의 없어 며칠씩 stale 한 값이 나오는 문제가 확인되어,
+// 미국 재무부 공식 일일 수익률 곡선(전일 종가 기준, 정확도 보장)을 대체 소스로 사용한다.
+const TREASURY_2Y_CACHE_TTL_MS = 30 * 60 * 1000;
+let treasury2yCache = null; // { at, data }
+
+async function getUsTreasury2Y() {
+  if (treasury2yCache && Date.now() - treasury2yCache.at < TREASURY_2Y_CACHE_TTL_MS) {
+    return treasury2yCache.data;
+  }
+  const year = new Date().getFullYear();
+  const url =
+    `https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${year}/all` +
+    `?type=daily_treasury_yield_curve&field_tdr_date_value=${year}&page&_format=csv`;
+  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+  if (!res.ok) throw new Error(`Treasury HTTP ${res.status}`);
+  const csv = await res.text();
+  const lines = csv.trim().split('\n');
+  const header = lines[0].split(',').map((h) => h.replace(/"/g, '').trim());
+  const col2y = header.indexOf('2 Yr');
+  if (col2y === -1) throw new Error('CSV에서 "2 Yr" 컬럼을 찾을 수 없음');
+
+  const rows = lines
+    .slice(1)
+    .map((line) => line.split(',').map((c) => c.replace(/"/g, '').trim()))
+    .filter((cells) => cells.length > col2y && cells[col2y]);
+  if (rows.length === 0) throw new Error('재무부 CSV에 데이터 행이 없음');
+
+  const latest = rows[0]; // CSV는 최신 날짜가 맨 위
+  const prev = rows[1] || latest;
+  const [mm, dd, yyyy] = latest[0].split('/');
+  const marketTime = Math.floor(Date.UTC(Number(yyyy), Number(mm) - 1, Number(dd)) / 1000);
+
+  const data = {
+    price: parseFloat(latest[col2y]),
+    previousClose: parseFloat(prev[col2y]),
+    marketTime,
+  };
+  treasury2yCache = { at: Date.now(), data };
+  return data;
+}
+
 // GET /api/chart?symbol=^TNX&range=1d&interval=5m
 app.get('/api/chart', async (req, res) => {
   const symbol = req.query.symbol;
@@ -108,6 +150,32 @@ app.get('/api/chart', async (req, res) => {
   if (!symbol) return res.status(400).json({ error: 'symbol 파라미터 필요' });
 
   try {
+    if (symbol === 'US2Y=TREASURY') {
+      const t = await getUsTreasury2Y();
+      res.set('Cache-Control', 'no-store');
+      return res.json({
+        symbol,
+        currency: 'USD',
+        price: t.price,
+        previousClose: t.previousClose,
+        marketTime: t.marketTime,
+        exchangeTz: 'America/New_York',
+        dayHigh: t.price,
+        dayLow: t.price,
+        series: [
+          {
+            time: t.marketTime,
+            open: t.previousClose,
+            high: Math.max(t.price, t.previousClose),
+            low: Math.min(t.price, t.previousClose),
+            close: t.price,
+          },
+        ],
+        source: 'us-treasury',
+        fetchedAt: Math.floor(Date.now() / 1000),
+      });
+    }
+
     const json = await fetchYahooChart(symbol, range, interval);
     res.set('Cache-Control', 'no-store');
     res.json(parseChart(json));

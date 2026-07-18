@@ -130,20 +130,11 @@ const NEWS_REFRESH_MS = 5 * 60 * 1000; // 5분 (시세보다 느긋하게)
 
 const ALL_ITEMS = SECTIONS.flatMap((s) => s.items);
 
-// ---- 기간 → interval 매핑 --------------------------------------------------
-const RANGE_INTERVAL = {
-  '1d': { interval: '5m', intraday: true },
-  '5d': { interval: '30m', intraday: true },
-  '1mo': { interval: '60m', intraday: true },
-  '6mo': { interval: '1d', intraday: false },
-  '1y': { interval: '1d', intraday: false },
-};
-
 const REFRESH_MS = 20000; // 20초 폴링
 const LIVE_THRESHOLD_S = 90; // 데이터가 90초 이내면 "실시간"으로 간주
 
 // mode: 'auto'(지연 시 선물 자동전환) | 'spot'(지수 고정) | 'fut'(선물 고정)
-const state = { mode: 'auto', range: '1d', tab: 'indices', view: 'cards' }; // 기본 탭: 지수, 기본 모드: 자동, 기본 뷰: 시세
+const state = { mode: 'auto', tab: 'indices', view: 'cards' }; // 기본 탭: 지수, 기본 모드: 자동, 기본 뷰: 시세
 const cards = {}; // key -> { item, el, chart, series, refs, trend? }
 
 // ---- 유틸 ------------------------------------------------------------------
@@ -267,15 +258,12 @@ function showTab(tabId) {
   }
 }
 
-// 현재 탭에 뉴스가 있는지에 따라 "시세/뉴스" 토글과 기간 버튼의 노출을 맞춘다.
+// 현재 탭에 뉴스가 있는지에 따라 "시세/뉴스" 토글의 노출을 맞춘다.
 function syncViewControls() {
   const activeSection = SECTIONS.find((s) => s.id === state.tab);
   const hasNews = !!(activeSection && activeSection.newsCategory);
   const viewToggle = document.getElementById('viewToggle');
-  const rangeGroup = document.getElementById('rangeButtonsGroup');
   if (viewToggle) viewToggle.hidden = !hasNews;
-  // 뉴스 보기 중엔 "차트 기간"이 의미가 없으니 숨긴다.
-  if (rangeGroup) rangeGroup.hidden = hasNews && state.view === 'news';
   applyViewMode();
 }
 
@@ -1000,12 +988,13 @@ async function updateNews() {
 }
 
 // 한 leg('spot'|'fut')의 데이터를 가져온다.
+// 카드에 더 이상 캔들 차트가 없어 과거 시세열은 쓰지 않으므로, 현재가 조회에
+// 충분한 가장 가벼운 기간/간격(1일치, 5분봉)으로 고정한다.
 async function fetchLeg(item, leg) {
   const conf = legConf(item, leg);
-  const { interval } = RANGE_INTERVAL[state.range];
   const base =
     item.type === 'index' ? '/api/index' : item.type === 'fx-krw' ? '/api/fx-krw' : '/api/chart';
-  const url = `${base}?symbol=${encodeURIComponent(conf.symbol)}&range=${state.range}&interval=${interval}`;
+  const url = `${base}?symbol=${encodeURIComponent(conf.symbol)}&range=1d&interval=5m`;
   const res = await fetch(url);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -1233,18 +1222,7 @@ function bindControls() {
     showTab(btn.dataset.tab);
   });
 
-  // 기간 버튼 (전역)
-  document.getElementById('rangeBar').addEventListener('click', (e) => {
-    const btn = e.target.closest('button[data-range]');
-    if (!btn) return;
-    state.range = btn.dataset.range;
-    document.querySelectorAll('#rangeButtonsGroup button').forEach((b) =>
-      b.classList.toggle('active', b === btn)
-    );
-    refreshAll(true);
-  });
-
-  // 시세/뉴스 보기 전환 (기간 선택 옆)
+  // 시세/뉴스 보기 전환
   const viewToggle = document.getElementById('viewToggle');
   viewToggle.addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-view]');

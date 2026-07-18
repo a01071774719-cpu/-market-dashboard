@@ -78,20 +78,17 @@ h1::before {
   text-align: center;
 }
 
-/* ---------- 토글 / 기간 버튼 ---------- */
-/* .rangebar 자체는 레이아웃(가로 배치)만 담당하고, 실제 "알약" 모양은
-   .range-buttons-group 과 .toggle 각각이 독립적으로 갖는다
-   (기간 선택 옆에 시세/뉴스 토글을 나란히 두기 위함). */
+/* ---------- 토글(시세/뉴스) ---------- */
 .rangebar {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-height: 32px; /* 뉴스 없는 탭(프리미엄 등)은 토글이 숨겨져도 상단바 높이가 유지되도록 */
   margin: 18px 24px 0;
   flex-wrap: wrap;
 }
 
-.toggle,
-.range-buttons-group {
+.toggle {
   display: inline-flex;
   gap: 4px;
   align-items: center;
@@ -103,13 +100,11 @@ h1::before {
 
 /* display:inline-flex 를 직접 지정해 두면 브라우저 기본 [hidden] 규칙보다
    우선순위가 높아져 hidden 속성만으로는 안 숨겨지므로 명시적으로 덮어쓴다. */
-.toggle[hidden],
-.range-buttons-group[hidden] {
+.toggle[hidden] {
   display: none;
 }
 
-.toggle button,
-.range-buttons-group button {
+.toggle button {
   background: transparent;
   border: none;
   color: var(--text-dim);
@@ -120,22 +115,14 @@ h1::before {
   transition: all 0.15s;
 }
 
-.toggle button:hover,
-.range-buttons-group button:hover {
+.toggle button:hover {
   color: var(--text);
 }
 
-.toggle button.active,
-.range-buttons-group button.active {
+.toggle button.active {
   background: var(--accent);
   color: #04120b;
   font-weight: 600;
-}
-
-.rangebar-label {
-  color: var(--text-dim);
-  font-size: 12px;
-  padding: 0 6px 0 2px;
 }
 
 .poll-status {

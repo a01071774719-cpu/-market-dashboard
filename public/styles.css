@@ -841,21 +841,13 @@ h1::before {
 }
 
 .yc-line {
-  stroke-width: 2;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .yc-line-latest {
   stroke: var(--accent);
-}
-
-.yc-line-oneMonthAgo {
-  stroke: var(--amber);
-  stroke-dasharray: 5 4;
-}
-
-.yc-line-oneYearAgo {
-  stroke: #8a8fd1;
-  stroke-dasharray: 2 3;
 }
 
 .yc-point,
@@ -865,51 +857,6 @@ h1::before {
 
 .yc-point-latest {
   fill: var(--accent);
-}
-
-.yc-point-oneMonthAgo {
-  fill: var(--amber);
-}
-
-.yc-point-oneYearAgo {
-  fill: #8a8fd1;
-}
-
-.yield-curve-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  font-size: 11.5px;
-  color: var(--text-dim);
-}
-
-.yc-legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-/* 범례 견본을 실제 선 스타일(실선/파선)과 맞춰 어떤 선인지 한눈에 구분되게 한다. */
-.yc-legend-swatch {
-  width: 18px;
-  height: 0;
-  border-top-width: 3px;
-  border-top-style: solid;
-  display: inline-block;
-}
-
-.yc-legend-latest {
-  border-top-color: var(--accent);
-}
-
-.yc-legend-oneMonthAgo {
-  border-top-color: var(--amber);
-  border-top-style: dashed;
-}
-
-.yc-legend-oneYearAgo {
-  border-top-color: #8a8fd1;
-  border-top-style: dashed;
 }
 
 .yield-curve-spread {
@@ -987,16 +934,6 @@ h1::before {
   height: min(64vh, 560px);
 }
 
-.yc-modal-legend {
-  font-size: 14px;
-  gap: 18px;
-}
-
-.yc-modal-legend .yc-legend-swatch {
-  width: 24px;
-  border-top-width: 4px;
-}
-
 .yc-modal-spread {
   font-size: 16px;
 }
@@ -1020,5 +957,4 @@ h1::before {
   .yc-modal-overlay { padding: 10px; }
   .yc-modal { padding: 18px; padding-top: 44px; }
   .yc-modal-svg { height: 50vh; }
-  .yc-modal-legend { font-size: 12px; gap: 10px; }
 }

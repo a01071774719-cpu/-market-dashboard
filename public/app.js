@@ -736,7 +736,6 @@ function buildYieldCurvePanel(container) {
       <svg class="yield-curve-svg" viewBox="0 0 640 260" preserveAspectRatio="none" data-ref="ycSvg"></svg>
       <div class="yc-tooltip" data-ref="ycTooltip" hidden></div>
     </div>
-    <div class="yield-curve-legend" data-ref="ycLegend"></div>
     <div class="yield-curve-spread" data-ref="ycSpread"></div>
     <div class="yield-curve-source">출처: 미국 재무부(Treasury.gov) 공식 일일 수익률 곡선</div>
     <div class="card-hint">클릭하면 크게 보기 🔍</div>
@@ -768,7 +767,6 @@ function buildYieldCurveModal() {
         <svg class="yield-curve-svg yc-modal-svg" viewBox="0 0 640 260" preserveAspectRatio="none" data-ref="ycModalSvg"></svg>
         <div class="yc-tooltip yc-modal-tooltip" data-ref="ycModalTooltip" hidden></div>
       </div>
-      <div class="yield-curve-legend yc-modal-legend" data-ref="ycModalLegend"></div>
       <div class="yield-curve-spread yc-modal-spread" data-ref="ycModalSpread"></div>
       <div class="yield-curve-source">출처: 미국 재무부(Treasury.gov) 공식 일일 수익률 곡선</div>
     </div>
@@ -827,7 +825,8 @@ function attachYieldCurveTooltip(svgEl, tooltipEl, wrapEl) {
   });
 }
 
-function buildYieldCurveSvg(maturities, curves) {
+// points: [{ key, label, value }, ...] (오늘자 만기별 수익률 하나만 그린다)
+function buildYieldCurveSvg(maturities, points) {
   const width = 640;
   const height = 260;
   const padL = 38;
@@ -837,10 +836,10 @@ function buildYieldCurveSvg(maturities, curves) {
   const plotW = width - padL - padR;
   const plotH = height - padT - padB;
 
-  const allValues = curves.flatMap((c) => c.points.map((p) => p.value)).filter((v) => v != null);
-  if (allValues.length === 0) return '';
-  const rawMin = Math.min(...allValues);
-  const rawMax = Math.max(...allValues);
+  const values = points.map((p) => p.value).filter((v) => v != null);
+  if (values.length === 0) return '';
+  const rawMin = Math.min(...values);
+  const rawMax = Math.max(...values);
   const minV = Math.floor((rawMin - 0.25) * 2) / 2;
   const maxV = Math.ceil((rawMax + 0.25) * 2) / 2;
 
@@ -862,22 +861,20 @@ function buildYieldCurveSvg(maturities, curves) {
     svg += `<text x="${x.toFixed(1)}" y="${height - padB + 16}" class="yc-axis-label" text-anchor="middle">${m.label}</text>`;
   });
 
-  [...curves].reverse().forEach((c) => {
-    const linePts = [];
-    c.points.forEach((p, i) => {
-      if (p.value == null) return;
-      linePts.push(`${xFor(i).toFixed(1)},${yFor(p.value).toFixed(1)}`);
-    });
-    if (linePts.length >= 2) {
-      svg += `<polyline points="${linePts.join(' ')}" class="yc-line yc-line-${c.key}" fill="none" data-tip="${escapeXml(c.shortLabel)}"><title>${escapeXml(c.shortLabel)}</title></polyline>`;
-    }
-    c.points.forEach((p, i) => {
-      if (p.value == null) return;
-      const x = xFor(i);
-      const y = yFor(p.value);
-      const tip = `${c.shortLabel} · ${p.label}: ${p.value.toFixed(2)}%`;
-      svg += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5" class="yc-point yc-point-${c.key}" data-tip="${escapeXml(tip)}"><title>${escapeXml(tip)}</title></circle>`;
-    });
+  const linePts = [];
+  points.forEach((p, i) => {
+    if (p.value == null) return;
+    linePts.push(`${xFor(i).toFixed(1)},${yFor(p.value).toFixed(1)}`);
+  });
+  if (linePts.length >= 2) {
+    svg += `<polyline points="${linePts.join(' ')}" class="yc-line yc-line-latest" fill="none" />`;
+  }
+  points.forEach((p, i) => {
+    if (p.value == null) return;
+    const x = xFor(i);
+    const y = yFor(p.value);
+    const tip = `${p.label}: ${p.value.toFixed(2)}%`;
+    svg += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5" class="yc-point yc-point-latest" data-tip="${escapeXml(tip)}"><title>${escapeXml(tip)}</title></circle>`;
   });
 
   return svg;
@@ -885,12 +882,6 @@ function buildYieldCurveSvg(maturities, curves) {
 
 function escapeXml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function buildYieldCurveLegendHtml(curves) {
-  return curves
-    .map((c) => `<span class="yc-legend-item"><span class="yc-legend-swatch yc-legend-${c.key}"></span>${c.label}</span>`)
-    .join('');
 }
 
 async function updateYieldCurve() {
@@ -901,19 +892,8 @@ async function updateYieldCurve() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
 
-    const curves = [
-      { key: 'latest', shortLabel: '오늘', label: `오늘 (${data.latest.date})`, points: data.latest.curve },
-    ];
-    if (data.oneMonthAgo) {
-      curves.push({ key: 'oneMonthAgo', shortLabel: '1개월 전', label: `1개월 전 (${data.oneMonthAgo.date})`, points: data.oneMonthAgo.curve });
-    }
-    if (data.oneYearAgo) {
-      curves.push({ key: 'oneYearAgo', shortLabel: '1년 전', label: `1년 전 (${data.oneYearAgo.date})`, points: data.oneYearAgo.curve });
-    }
-
-    const svgMarkup = buildYieldCurveSvg(data.maturities, curves);
+    const svgMarkup = buildYieldCurveSvg(data.maturities, data.latest.curve);
     const dateText = `기준일 ${data.latest.date} (전 영업일 종가)`;
-    const legendHtml = buildYieldCurveLegendHtml(curves);
     let spreadHtml;
     if (data.spread10y2y != null) {
       const inverted = data.spread10y2y < 0;
@@ -928,7 +908,6 @@ async function updateYieldCurve() {
     // 작은 카드 뷰
     refs.ycSvg.innerHTML = svgMarkup;
     refs.ycDate.textContent = dateText;
-    refs.ycLegend.innerHTML = legendHtml;
     refs.ycSpread.innerHTML = spreadHtml;
 
     // 확대 모달 (열려있지 않아도 동기화해 둔다 — 다음에 열 때 최신 데이터가 바로 보이도록)
@@ -936,7 +915,6 @@ async function updateYieldCurve() {
     if (mRefs.ycModalSvg) {
       mRefs.ycModalSvg.innerHTML = svgMarkup;
       mRefs.ycModalDate.textContent = dateText;
-      mRefs.ycModalLegend.innerHTML = legendHtml;
       mRefs.ycModalSpread.innerHTML = spreadHtml;
     }
   } catch (e) {
